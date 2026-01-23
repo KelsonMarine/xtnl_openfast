@@ -85,4 +85,30 @@ if (BUILD_OPENFAST_CPP_DRIVER)
     LIBRARY DESTINATION lib
     PUBLIC_HEADER DESTINATION include
   )
+
+  add_executable(safewindopenfastcpp src/SafeWind_FAST_Prog.cpp)
+  target_link_libraries(safewindopenfastcpp 
+    ${YAML_CPP_LIBRARIES}
+    openfastcpplib 
+  )
+  target_include_directories(safewindopenfastcpp PRIVATE ${YAML_CPP_INCLUDE_DIR})
+  set_target_properties(safewindopenfastcpp PROPERTIES LINKER_LANGUAGE CXX)
+
+  if(MPI_COMPILE_FLAGS)
+    set_target_properties(safewindopenfastcpp PROPERTIES
+      COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
+  endif(MPI_COMPILE_FLAGS)
+
+  if(MPI_LINK_FLAGS)
+    set_target_properties(safewindopenfastcpp PROPERTIES
+      LINK_FLAGS "${MPI_LINK_FLAGS}")
+  endif(MPI_LINK_FLAGS)
+
+  install(TARGETS safewindopenfastcpp 
+    EXPORT "${CMAKE_PROJECT_NAME}Libraries"
+    RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    PUBLIC_HEADER DESTINATION include
+  )
 endif()
