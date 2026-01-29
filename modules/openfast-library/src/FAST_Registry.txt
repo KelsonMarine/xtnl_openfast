@@ -30,6 +30,7 @@ usefrom	MAP_Registry.txt
 usefrom	MoorDyn_Registry.txt
 usefrom	OrcaFlexInterface.txt
 usefrom	ExtPtfm_MCKF_Registry.txt
+usefrom	ExtPtfmLoads_Registry.txt
 
 # ...... Constants ............................................................................
 
@@ -58,7 +59,8 @@ param	^	-	INTEGER	Module_IceF	-	18	-	"IceFloe"	-
 param	^	-	INTEGER	Module_IceD	-	19	-	"IceDyn"	-
 param	^	-	INTEGER	Module_ADsk	-	20	-	"AeroDisk"	-
 param	^	-	INTEGER	Module_SED 	-	21	-	"Simplified-ElastoDyn" -
-param	^	-	INTEGER	NumModules	-	21	-	"The number of modules available in FAST"	-
+param	^	-	INTEGER	Module_ExtPtfmLd 	-	22	-	"Simplified-ElastoDyn" -
+param	^	-	INTEGER	NumModules	-	22	-	"The number of modules available in FAST"	-
 # Other Constants
 param	^	-	INTEGER	MaxNBlades	-	3	-	"Maximum number of blades allowed on a turbine"	-
 param	^	-	INTEGER	IceD_MaxLegs	-	4	-	"because I don't know how many legs there are before calling IceD_Init and I don't want to copy the data because of sibling mesh issues, I'm going to allocate IceD based on this number"	-
@@ -133,7 +135,7 @@ typedef	^	FAST_ParameterType	IntKi	CompInflow	-	-	-	"Compute inflow wind conditi
 typedef	^	FAST_ParameterType	IntKi	CompAero	-	-	-	"Compute aerodynamic loads (switch) {Module_None; Module_ADsk; Module_AD}"	-
 typedef	^	FAST_ParameterType	IntKi	CompServo	-	-	-	"Compute control and electrical-drive dynamics (switch) {Module_None; Module_SrvD}"	-
 typedef	^	FAST_ParameterType	IntKi	CompSeaSt   -	-	-	"Compute sea states; wave kinematics (switch) {Module_None; Module_SeaSt}"	-
-typedef	^	FAST_ParameterType	IntKi	CompHydro	-	-	-	"Compute hydrodynamic loads (switch) {Module_None; Module_HD}"	-
+typedef	^	FAST_ParameterType	IntKi	CompHydro	-	-	-	"Compute hydrodynamic loads (switch) {Module_None; Module_HD; Module_ExtPtfmLd}"	-
 typedef	^	FAST_ParameterType	IntKi	CompSub	-	-	-	"Compute sub-structural dynamics (switch) {Module_None; Module_SD, Module_ExtPtfm}"	-
 typedef	^	FAST_ParameterType	IntKi	CompMooring	-	-	-	"Compute mooring system (switch) {Module_None; Module_MAP; Module_FEAM; Module_MD; Module_Orca}"	-
 typedef	^	FAST_ParameterType	IntKi	CompIce	-	-	-	"Compute ice loading (switch) {Module_None; Module_IceF, Module_IceD}"	-
@@ -582,6 +584,20 @@ typedef	^	^	ExtPtfm_InputType	Input_Saved	{:}	-	-	"Backup Array of inputs associ
 typedef	^	^	DbKi	InputTimes	{:}	-	-	"Array of times associated with Input Array"
 typedef	^	^	DbKi	InputTimes_Saved	{:}	-	-	"Backup Array of times associated with Input Array"
 
+# ..... ExtPtfmLd data .......................................................................................................
+typedef	FAST	ExtPtfmLd_Data	ExtPtfmLd_ContinuousStateType	x	{NumStateTimes}	-	-	"Continuous states"
+typedef	^	^	ExtPtfmLd_DiscreteStateType	xd	{NumStateTimes}	-	-	"Discrete states"
+typedef	^	^	ExtPtfmLd_ConstraintStateType	z	{NumStateTimes}	-	-	"Constraint states"
+typedef	^	^	ExtPtfmLd_OtherStateType	OtherSt	{NumStateTimes}	-	-	"Other states"
+typedef	^	^	ExtPtfmLd_ParameterType	p	-	-	-	"Parameters"
+typedef	^	^	ExtPtfmLd_InputType	u	-	-	-	"System inputs"
+typedef	^	^	ExtPtfmLd_OutputType	y	-	-	-	"System outputs"
+typedef	^	^	ExtPtfmLd_MiscVarType	m	-	-	-	"Misc/optimization variables"
+typedef	^	^	ExtPtfmLd_InputType	Input	{:}	-	-	"Array of inputs associated with InputTimes"
+typedef	^	^	ExtPtfmLd_InputType	Input_Saved	{:}	-	-	"Backup Array of inputs associated with InputTimes"
+typedef	^	^	DbKi	InputTimes	{:}	-	-	"Array of times associated with Input Array"
+typedef	^	^	DbKi	InputTimes_Saved	{:}	-	-	"Backup Array of times associated with Input Array"
+
 # ..... SeaState data .......................................................................................................
 typedef	FAST	SeaState_Data	SeaSt_ContinuousStateType	x	{NumStateTimes}	-	-	"Continuous states"
 typedef	^	^	SeaSt_DiscreteStateType	xd	{NumStateTimes}	-	-	"Discrete states"
@@ -788,6 +804,7 @@ typedef	^	FAST_ModuleMapType	MeshType	y_BD_BldMotion_4Loads	{:}	-	-	"BD blade mo
 typedef	^	FAST_ModuleMapType	MeshType	u_BD_Distrload	{:}	-	-	"copy of BD DistrLoad input meshes"
 typedef	^	FAST_ModuleMapType	MeshType	u_Orca_PtfmMesh	-	-	-	"copy of Orca PtfmMesh input mesh"
 typedef	^	FAST_ModuleMapType	MeshType	u_ExtPtfm_PtfmMesh	-	-	-	"copy of ExtPtfm_MCKF PtfmMesh input mesh"
+typedef	^	FAST_ModuleMapType	MeshType	u_ExtPtfmLd_PtfmMesh	-	-	-	"copy of ExtPtfm_MCKF PtfmMesh input mesh"
 typedef	^	FAST_ModuleMapType	MeshType	u_SED_HubPtLoad	-	-	-	"copy of  SED input mesh"
 #typedef	^	FAST_ModuleMapType	MeshType	u_FarmMD_CoupledLoads -	-	-	"FAST-internal copy of MoorDyn's CoupledLoads output mesh for use with shared moorings in FAST.Farm"
 # for steady-state solve (convert 1 blade to all blades)
@@ -846,6 +863,8 @@ typedef   ^   FAST_InitData    SD_InitInputType             InData_SD       -  -
 typedef   ^   FAST_InitData    SD_InitOutputType           OutData_SD       -  -  -  "SD Initialization output data"
 typedef   ^   FAST_InitData    ExtPtfm_InitInputType        InData_ExtPtfm  -  -  -  "ExtPtfm Initialization input data"
 typedef   ^   FAST_InitData    ExtPtfm_InitOutputType      OutData_ExtPtfm  -  -  -  "ExtPtfm Initialization output data"
+typedef   ^   FAST_InitData    ExtPtfmLd_InitInputType      InData_ExtPtfmLd  -  -  -  "ExtPtfmLd Initialization input data"
+typedef   ^   FAST_InitData    ExtPtfmLd_InitOutputType    OutData_ExtPtfmLd  -  -  -  "ExtPtfmLd Initialization output data"
 typedef   ^   FAST_InitData    MAP_InitInputType            InData_MAP      -  -  -  "MAP Initialization input data"
 typedef   ^   FAST_InitData    MAP_InitOutputType          OutData_MAP      -  -  -  "MAP Initialization output data"
 typedef   ^   FAST_InitData    FEAM_InitInputType           InData_FEAM     -  -  -  "FEAM Initialization input data"
@@ -904,4 +923,5 @@ typedef	^	FAST_TurbineType	OrcaFlex_Data	Orca	-	-	-	"Data for the OrcaFlex inter
 typedef	^	FAST_TurbineType	IceFloe_Data	IceF	-	-	-	"Data for the IceFloe module"	-
 typedef	^	FAST_TurbineType	IceDyn_Data	IceD	-	-	-	"Data for the IceDyn module"	-
 typedef	^	FAST_TurbineType	ExtPtfm_Data	ExtPtfm	-	-	-	"Data for the ExtPtfm (external platform loading) module"	-
+typedef	^	FAST_TurbineType	ExtPtfmLd_Data	ExtPtfmLd	-	-	-	"Data for the ExtPtfmLd (external platform loading) module"	-
 #typedef	^	FAST_TurbineType	FAST_InitData	Init	-	-	-	"Data for all modules at initialization"	-

@@ -4,6 +4,7 @@
 // routines in FAST_Library_$(PlatformName).dll
 #include "ExternalInflow_Types.h"
 #include "ExtLoadsDX_Types.h"
+#include "ExtPtfmLoadsDX_Types.h"
 #include "stdio.h"
 
 #ifdef __cplusplus
@@ -27,6 +28,7 @@ EXTERNAL_ROUTINE void FAST_ExtInfw_Init(int * iTurb, double *TMax, const char *I
 
 EXTERNAL_ROUTINE void FAST_ExtLoads_Restart(int * iTurb, const char *CheckpointRootName, int *AbortErrLev, double * dt, int * NumBl, int * n_t_global, ExtLdDX_InputType_t* ExtLdDX_Input, ExtLdDX_ParameterType_t* ExtLdDX_Parameter, ExtLdDX_OutputType_t* ExtLdDX_Output, int *ErrStat, char *ErrMsg);
 EXTERNAL_ROUTINE void FAST_ExtLoads_Init(int * iTurb, double *TMax, const char *InputFileName, int * TurbineID, char *OutFileRoot, float * TurbinePosition, int *AbortErrLev, double * dtDriver, double * dt, int * NumBl, double * az_blend_mean, double * az_blend_delta, ExtLdDX_InputType_t* ExtLdDX_Input, ExtLdDX_ParameterType_t* ExtLdDX_Parameter, ExtLdDX_OutputType_t* ExtLdDX_Output, int *ErrStat, char *ErrMsg);
+EXTERNAL_ROUTINE void FAST_ExtPtfmLoads_Init(int * iTurb, double *TMax, const char *InputFileName, int * TurbineID, char *OutFileRoot, float * TurbinePosition, int *AbortErrLev, double * dtDriver, double * dt, int * NumBl, double * az_blend_mean, double * az_blend_delta, ExtPtfmLdDX_InputType_t* ExtPtfmLdDX_Input, ExtPtfmLdDX_ParameterType_t* ExtLdDX_Parameter, ExtPtfmLdDX_OutputType_t* ExtLdDX_Output, int *ErrStat, char *ErrMsg);
 EXTERNAL_ROUTINE void FAST_CFD_Solution0(int * iTurb, int *ErrStat, char *ErrMsg);
 EXTERNAL_ROUTINE void FAST_CFD_InitIOarrays_SubStep(int * iTurb, int *ErrStat, char *ErrMsg);
 EXTERNAL_ROUTINE void FAST_CFD_Prework(int * iTurb, int *ErrStat, char *ErrMsg);

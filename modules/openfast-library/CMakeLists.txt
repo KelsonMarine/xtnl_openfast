@@ -50,6 +50,7 @@ target_link_libraries(openfast_prelib
   beamdynlib
   elastodynlib
   extptfm_mckflib
+  extptfmloadslib
   feamlib
   extinflowtypeslib
   hydrodynlib

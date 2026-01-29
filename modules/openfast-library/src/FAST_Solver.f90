@@ -46,6 +46,7 @@ MODULE FAST_Solver
    USE SubDyn
    USE ExternalInflow
    Use ExtPtfm_MCKF
+   Use ExtPtfmLoads
    
 
    IMPLICIT NONE
@@ -2004,6 +2005,7 @@ SUBROUTINE FullOpt1_InputOutputSolve( this_time, p_FAST, calcJacobian &
                                      , u_ED,     p_ED,     x_ED,     xd_ED,     z_ED,     OtherSt_ED,     y_ED,     m_ED      &
                                      , u_SD,     p_SD,     x_SD,     xd_SD,     z_SD,     OtherSt_SD,     y_SD,     m_SD      & 
                                      , u_ExtPtfm,p_ExtPtfm,x_ExtPtfm,xd_ExtPtfm,z_ExtPtfm,OtherSt_ExtPtfm,y_ExtPtfm,m_ExtPtfm & 
+                                     , u_ExtPtfmLd,p_ExtPtfmLd,x_ExtPtfmLd,xd_ExtPtfmLd,z_ExtPtfmLd,OtherSt_ExtPtfmLd,y_ExtPtfmLd,m_ExtPtfmLd & 
                                      , u_HD,     p_HD,     x_HD,     xd_HD,     z_HD,     OtherSt_HD,     y_HD,     m_HD      & 
                                      , u_BD,     p_BD,     x_BD,     xd_BD,     z_BD,     OtherSt_BD,     y_BD,     m_BD      & 
                                      , u_Orca,   p_Orca,   x_Orca,   xd_Orca,   z_Orca,   OtherSt_Orca,   y_Orca,   m_Orca    & 
@@ -2068,6 +2070,16 @@ SUBROUTINE FullOpt1_InputOutputSolve( this_time, p_FAST, calcJacobian &
    TYPE(ExtPtfm_InputType)           , INTENT(INOUT) :: u_ExtPtfm                 !< System inputs
    TYPE(ExtPtfm_OutputType)          , INTENT(INOUT) :: y_ExtPtfm                 !< System outputs
    TYPE(ExtPtfm_MiscVarType)         , INTENT(INOUT) :: m_ExtPtfm                 !< misc/optimization variables
+
+      !ExtPtfmLd:                                                                    
+   TYPE(ExtPtfmLd_ContinuousStateType), INTENT(IN   ) :: x_ExtPtfmLd               !< Continuous states
+   TYPE(ExtPtfmLd_DiscreteStateType)  , INTENT(IN   ) :: xd_ExtPtfmLd              !< Discrete states
+   TYPE(ExtPtfmLd_ConstraintStateType), INTENT(IN   ) :: z_ExtPtfmLd               !< Constraint states
+   TYPE(ExtPtfmLd_OtherStateType)     , INTENT(IN   ) :: OtherSt_ExtPtfmLd         !< Other states
+   TYPE(ExtPtfmLd_ParameterType)      , INTENT(IN   ) :: p_ExtPtfmLd               !< Parameters
+   TYPE(ExtPtfmLd_InputType)          , INTENT(INOUT) :: u_ExtPtfmLd               !< System inputs
+   TYPE(ExtPtfmLd_OutputType)         , INTENT(INOUT) :: y_ExtPtfmLd               !< System outputs
+   TYPE(ExtPtfmLd_MiscVarType)        , INTENT(INOUT) :: m_ExtPtfmLd               !< misc/optimization variables
           
       !HydroDyn: 
    TYPE(HydroDyn_ContinuousStateType), INTENT(IN   ) :: x_HD                      !< Continuous states
@@ -4096,7 +4108,7 @@ SUBROUTINE ResetRemapFlags(p_FAST, ED, SED, BD, AD, ExtLd, HD, SD, ExtPtfm, SrvD
 END SUBROUTINE ResetRemapFlags  
 !----------------------------------------------------------------------------------------------------------------------------------
 !> This routine initializes all of the mapping data structures needed between the various modules.
-SUBROUTINE InitModuleMappings(p_FAST, ED, SED, BD, AD, ADsk, ExtLd, HD, SD, ExtPtfm, SrvD, MAPp, FEAM, MD, Orca, IceF, IceD, MeshMapData, ErrStat, ErrMsg)
+SUBROUTINE InitModuleMappings(p_FAST, ED, SED, BD, AD, ADsk, ExtLd, HD, SD, ExtPtfm, SrvD, MAPp, FEAM, MD, Orca, IceF, IceD, ExtPtfmLd, MeshMapData, ErrStat, ErrMsg)
 !...............................................................................................................................
    
    TYPE(FAST_ParameterType),   INTENT(INOUT) :: p_FAST              !< Parameters for the glue code
@@ -4116,6 +4128,7 @@ SUBROUTINE InitModuleMappings(p_FAST, ED, SED, BD, AD, ADsk, ExtLd, HD, SD, ExtP
    TYPE(OrcaFlex_Data),        INTENT(INOUT) :: Orca                !< OrcaFlex interface data
    TYPE(IceFloe_Data),         INTENT(INOUT) :: IceF                !< IceFloe data
    TYPE(IceDyn_Data),          INTENT(INOUT) :: IceD                !< All the IceDyn data used in time-step loop
+   TYPE(ExtPtfmLd_Data),       INTENT(INOUT) :: ExtPtfmLd             !< ExtPtfmLd data
 
    TYPE(FAST_ModuleMapType),   INTENT(INOUT) :: MeshMapData         !< Data for mapping between modules
    
@@ -4181,6 +4194,13 @@ SUBROUTINE InitModuleMappings(p_FAST, ED, SED, BD, AD, ADsk, ExtLd, HD, SD, ExtP
       p_FAST%SolveOption = Solve_FullOpt1
       
    ELSEIF ( p_FAST%CompHydro == Module_HD ) THEN
+   
+      IF (p_FAST%CompElast == Module_ED) THEN
+         p_FAST%SolveOption = Solve_SimplifiedOpt1
+      ELSE
+         p_FAST%SolveOption = Solve_FullOpt1
+      END IF
+   ELSEIF ( p_FAST%CompHydro == Module_ExtPtfmLd ) THEN
    
       IF (p_FAST%CompElast == Module_ED) THEN
          p_FAST%SolveOption = Solve_SimplifiedOpt1
@@ -4737,6 +4757,19 @@ SUBROUTINE InitModuleMappings(p_FAST, ED, SED, BD, AD, ADsk, ExtLd, HD, SD, ExtP
     
    END IF !HydroDyn-{ElastoDyn or SubDyn}
 
+   IF ( p_FAST%CompHydro == Module_ExtPtfmLd ) THEN
+                           
+      ! NOTE: the MeshMapCreate routine returns fatal errors if either mesh is not committed
+      ! Regardless of the offshore configuration, ED platform motions will be mapped to the PRPMesh of HD
+      ! we're just going to assume PlatformLoads and PlatformMotion are committed
+      
+         ! ExtPtfmLd PtfmMesh point mesh to/from ElastoDyn point mesh
+      CALL MeshMapCreate( ExtPtfmLd%y%PtfmMesh, SubstructureLoads,  MeshMapData%HD_W_P_2_SubStructure, ErrStat2, ErrMsg2 )
+         CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName//':SD_TP_2_Ptfm' )                  
+      CALL MeshMapCreate( PlatformMotion, ExtPtfmLd%Input(1)%PtfmMotion,  MeshMapData%ED_P_2_HD_PRP_P, ErrStat2, ErrMsg2 )
+         CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName//':Ptfm_2_SD_TP' )                  
+   END IF
+
       
 !-------------------------
 !  ElastoDyn <-> SubDyn
@@ -4988,7 +5021,7 @@ END SUBROUTINE InitModuleMappings
 !! *** Note that modules that do not have direct feedthrough should be called first. ***
 SUBROUTINE CalcOutputs_And_SolveForInputs( n_t_global, this_time, this_state, calcJacobian, NextJacCalcTime, &
                p_FAST, m_FAST, WriteThisStep, ED, SED, BD, &
-               SrvD, AD, ADsk, ExtLd, IfW, ExtInfw, HD, SD, ExtPtfm, MAPp, FEAM, MD, Orca, IceF, IceD, MeshMapData, ErrStat, ErrMsg )
+               SrvD, AD, ADsk, ExtLd, IfW, ExtInfw, HD, SD, ExtPtfm, ExtPtfmLd, MAPp, FEAM, MD, Orca, IceF, IceD, MeshMapData, ErrStat, ErrMsg )
    REAL(DbKi)              , intent(in   ) :: this_time           !< The current simulation time (actual or time of prediction)
    INTEGER(IntKi)          , intent(in   ) :: this_state          !< Index into the state array (current or predicted states)
    INTEGER(IntKi)          , intent(in   ) :: n_t_global          !< current time step (used only for SrvD hack)
@@ -5011,6 +5044,7 @@ SUBROUTINE CalcOutputs_And_SolveForInputs( n_t_global, this_time, this_state, ca
    TYPE(HydroDyn_Data),      INTENT(INOUT) :: HD                  !< HydroDyn data
    TYPE(SubDyn_Data),        INTENT(INOUT) :: SD                  !< SubDyn data
    TYPE(ExtPtfm_Data),       INTENT(INOUT) :: ExtPtfm             !< ExtPtfm data
+   TYPE(ExtPtfmLd_Data),     INTENT(INOUT) :: ExtPtfmLd           !< ExtPtfm data
    TYPE(MAP_Data),           INTENT(INOUT) :: MAPp                !< MAP data
    TYPE(FEAMooring_Data),    INTENT(INOUT) :: FEAM                !< FEAMooring data
    TYPE(MoorDyn_Data),       INTENT(INOUT) :: MD                  !< Data for the MoorDyn module
@@ -5097,7 +5131,7 @@ SUBROUTINE CalcOutputs_And_SolveForInputs( n_t_global, this_time, this_state, ca
       
    
       !> Solve option 1 (rigorous solve on loads/accelerations)
-   CALL SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD, SD, ExtPtfm, MAPp, FEAM, MD, Orca, IceF, IceD, SrvD, AD, MeshMapData, ErrStat2, ErrMsg2, WriteThisStep)
+   CALL SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD, SD, ExtPtfm, ExtPtfmLd, MAPp, FEAM, MD, Orca, IceF, IceD, SrvD, AD, MeshMapData, ErrStat2, ErrMsg2, WriteThisStep)
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )  
 
       
@@ -5152,7 +5186,7 @@ END SUBROUTINE CalcOutputs_And_SolveForInputs
 !----------------------------------------------------------------------------------------------------------------------------------
 !> This routine implements the "option 1" solve for all inputs with direct links to HD, SD, ExtPtfm, MAP, OrcaFlex interface, and the ED 
 !! platform reference point. Also in solve option 1 are the BD-ED blade root coupling.
-SUBROUTINE SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD, SD, ExtPtfm, MAPp, FEAM, MD, Orca, IceF, IceD, SrvD, AD, MeshMapData, ErrStat, ErrMsg, WriteThisStep )
+SUBROUTINE SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD, SD, ExtPtfm, ExtPtfmLd, MAPp, FEAM, MD, Orca, IceF, IceD, SrvD, AD, MeshMapData, ErrStat, ErrMsg, WriteThisStep )
 !...............................................................................................................................
    REAL(DbKi)              ,         intent(in   ) :: this_time           !< The current simulation time (actual or time of prediction)
    INTEGER(IntKi)          ,         intent(in   ) :: this_state          !< Index into the state array (current or predicted states)
@@ -5165,6 +5199,7 @@ SUBROUTINE SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD,
    TYPE(HydroDyn_Data),              INTENT(INOUT) :: HD                  !< HydroDyn data
    TYPE(SubDyn_Data),    TARGET,     INTENT(INOUT) :: SD                  !< SubDyn data
    TYPE(ExtPtfm_Data),               INTENT(INOUT) :: ExtPtfm             !< ExtPtfm data
+   TYPE(ExtPtfmLd_Data),             INTENT(INOUT) :: ExtPtfmLd           !< ExtPtfmLd data
    TYPE(MAP_Data),                   INTENT(INOUT) :: MAPp                !< MAP data
    TYPE(FEAMooring_Data),            INTENT(INOUT) :: FEAM                !< FEAMooring data
    TYPE(MoorDyn_Data),               INTENT(INOUT) :: MD                  !< MoorDyn data
@@ -5256,6 +5291,7 @@ SUBROUTINE SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD,
           ,      ED%Input(1),     ED%p,     ED%x(  this_state),     ED%xd(  this_state),     ED%z(  this_state),     ED%OtherSt(  this_state),     ED%y, ED%m &
           ,      SD%Input(1),     SD%p,     SD%x(  this_state),     SD%xd(  this_state),     SD%z(  this_state),     SD%OtherSt(  this_state),     SD%y    , SD%m & 
           , ExtPtfm%Input(1),ExtPtfm%p,ExtPtfm%x(  this_state),ExtPtfm%xd(  this_state),ExtPtfm%z(  this_state),ExtPtfm%OtherSt(  this_state),ExtPtfm%y,ExtPtfm%m & 
+          , ExtPtfmLd%Input(1),ExtPtfmLd%p,ExtPtfmLd%x(  this_state),ExtPtfmLd%xd(  this_state),ExtPtfmLd%z(  this_state),ExtPtfmLd%OtherSt(  this_state),ExtPtfmLd%y,ExtPtfmLd%m & 
           ,      HD%Input(1),     HD%p,     HD%x(  this_state),     HD%xd(  this_state),     HD%z(  this_state),     HD%OtherSt(  this_state),     HD%y    , HD%m & 
           ,      BD%Input(1,:),   BD%p,     BD%x(:,this_state),     BD%xd(:,this_state),     BD%z(:,this_state),     BD%OtherSt(:,this_state),     BD%y    , BD%m & 
           ,    Orca%Input(1),   Orca%p,   Orca%x( this_state),    Orca%xd(  this_state),   Orca%z(  this_state),   Orca%OtherSt(  this_state),   Orca%y  , Orca%m & 
@@ -5271,13 +5307,33 @@ SUBROUTINE SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD,
                         
                
    ELSEIF ( p_FAST%SolveOption == Solve_SimplifiedOpt1 ) THEN  ! No substructure model
-                                                    
-      CALL ED_HD_InputOutputSolve(  this_time, p_FAST, calcJacobian &
-                                    , ED%Input(1), ED%p, ED%x(this_state), ED%xd(this_state), ED%z(this_state), ED%OtherSt(this_state), ED%y,  ED%m &
-                                    , HD%Input(1), HD%p, HD%x(this_state), HD%xd(this_state), HD%z(this_state), HD%OtherSt(this_state), HD%y,  HD%m & 
-                                    , MAPp%Input(1), MAPp%y, FEAM%Input(1), FEAM%y, MD%Input(1), MD%y, SrvD%Input(1), SrvD%y &          
-                                    , MeshMapData , ErrStat2, ErrMsg2, WriteThisStep )
+      IF (p_FAST%CompHydro == Module_ExtPtfmLd) THEN
+         CALL ExtPtfmLd_ConvertOpDataForOpenFAST(ExtPtfmLd%y, ExtPtfmLd%Input(1), ExtPtfmLd%m, ExtPtfmLd%p, ErrStat2, ErrMsg2)
          CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+         ED%Input(1)%PlatformPtMesh%Force(:,1) = ExtPtfmLd%y%PtfmMesh%Force(:, 1)
+         ED%Input(1)%PlatformPtMesh%Moment(:,1) = ExtPtfmLd%y%PtfmMesh%Moment(:, 1)
+         print *,"ExtPtfmLd%y%PtfmMesh%Force(:, 1) = ", ExtPtfmLd%y%PtfmMesh%Force(:, 1)
+         print *,"ExtPtfmLd%y%PtfmMesh%Moment(:, 1) = ", ExtPtfmLd%y%PtfmMesh%Moment(:, 1)
+
+         CALL ED_CalcOutput( this_time, ED%Input(1), ED%p, ED%x(this_state), ED%xd(this_state), ED%z(this_state), ED%OtherSt(this_state), ED%y,  ED%m, ErrStat2, ErrMsg2 )
+            CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+
+         CALL Transfer_Point_to_Point( ED%y%PlatformPtMesh, ExtPtfmLd%Input(1)%PtfmMotion, MeshMapData%ED_P_2_HD_PRP_P, ErrStat2, ErrMsg2 )
+            CALL SetErrStat(ErrStat2,ErrMsg2,ErrStat, ErrMsg,RoutineName//' (ExtPtfmLd%u%PtfmMotion)' )
+            
+         CALL ExtPtfmLd_ConvertInpDataForExtProg(ExtPtfmLd%Input(1), ExtPtfmLd%p, ErrStat2, ErrMsg2)
+            CALL SetErrStat(ErrStat2,ErrMsg2,ErrStat, ErrMsg,RoutineName)
+
+         
+      ELSE
+         CALL ED_HD_InputOutputSolve(  this_time, p_FAST, calcJacobian &
+                                       , ED%Input(1), ED%p, ED%x(this_state), ED%xd(this_state), ED%z(this_state), ED%OtherSt(this_state), ED%y,  ED%m &
+                                       , HD%Input(1), HD%p, HD%x(this_state), HD%xd(this_state), HD%z(this_state), HD%OtherSt(this_state), HD%y,  HD%m & 
+                                       , MAPp%Input(1), MAPp%y, FEAM%Input(1), FEAM%y, MD%Input(1), MD%y, SrvD%Input(1), SrvD%y &          
+                                       , MeshMapData , ErrStat2, ErrMsg2, WriteThisStep )
+            CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      ENDIF
+                                                    
                                                                   
    END IF ! HD, BD, and/or SD coupled to ElastoDyn
                          
