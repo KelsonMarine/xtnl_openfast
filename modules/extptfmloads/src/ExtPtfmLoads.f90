@@ -139,14 +139,14 @@ SUBROUTINE ExtPtfmLd_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, 
    call Init_meshes(u, y, InitInp, ErrStat2, ErrMsg2); if(Failed()) return
 
 
-   CALL AllocPAry( u%DX_u%ptfmDef, 3+9+3+3, 'ptfmDef', ErrStat2, ErrMsg2 ); if(Failed()) return
+   CALL AllocPAry( u%DX_u%ptfmDef, 3+9+3+3+3+3, 'ptfmDef', ErrStat2, ErrMsg2 ); if(Failed()) return
    ! allocate( u%DX_u%ptfmDef(3+9+3+3), stat=errStat )
    ! if (errStat /= 0) then
    !    call SetErrStat( ErrID_Fatal, 'Error allocating u%DX_u%ptfmDef.', ErrStat, ErrMsg, RoutineName )      
    !    return
    ! end if
 
-   u%DX_u%C_obj%ptfmDef_Len = 3+9+3+3
+   u%DX_u%C_obj%ptfmDef_Len = 3+9+3+3+3+3
    u%DX_u%C_obj%ptfmDef = C_LOC(u%DX_u%ptfmDef(1))
 
    CALL AllocPAry( y%DX_y%ptfmLd, 6, 'ptfmLd', ErrStat2, ErrMsg2 ); CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
@@ -747,18 +747,22 @@ subroutine ExtPtfmLd_ConvertInpDataForExtProg(u, p, errStat, errMsg )
    u%DX_u%ptfmDef(10:12) = u%PtfmMotion%Orientation(:, 3, 1)
    u%DX_u%ptfmDef(13:15) = u%PtfmMotion%TranslationVel(:, 1)
    u%DX_u%ptfmDef(16:18) = u%PtfmMotion%RotationVel(:, 1)
+   u%DX_u%ptfmDef(19:21) = u%PtfmMotion%TranslationAcc(:, 1)
+   u%DX_u%ptfmDef(22:24) = u%PtfmMotion%RotationAcc(:, 1)
 
-   print *, "---- Platform State ----"
-   write(*,'(A,3F10.5)') "Displacement (m): ", u%PtfmMotion%TranslationDisp(:, 1)
+   ! print *, "---- Platform State ----"
+   ! write(*,'(A,3F10.5)') "Displacement (m): ", u%PtfmMotion%TranslationDisp(:, 1)
 
-   print *, "Orientation matrix:"
-   write(*,'(3F10.5)') u%PtfmMotion%Orientation(:, 1, 1)
-   write(*,'(3F10.5)') u%PtfmMotion%Orientation(:, 2, 1)
-   write(*,'(3F10.5)') u%PtfmMotion%Orientation(:, 3, 1)
+   ! print *, "Orientation matrix:"
+   ! write(*,'(3F10.5)') u%PtfmMotion%Orientation(:, 1, 1)
+   ! write(*,'(3F10.5)') u%PtfmMotion%Orientation(:, 2, 1)
+   ! write(*,'(3F10.5)') u%PtfmMotion%Orientation(:, 3, 1)
 
-   write(*,'(A,3F10.5)') "Trans Vel (m/s): ", u%PtfmMotion%TranslationVel(:, 1)
-   write(*,'(A,3F10.5)') "Rot Vel (rad/s): ", u%PtfmMotion%RotationVel(:, 1)
-   print *, "------------------------"
+   ! write(*,'(A,3F10.5)') "Trans Vel (m/s): ", u%PtfmMotion%TranslationVel(:, 1)
+   ! write(*,'(A,3F10.5)') "Rot Vel (rad/s): ", u%PtfmMotion%RotationVel(:, 1)
+   ! print *, "------------------------"
+   ! print *,"C_LOC(u%DX_u%ptfmDef(1)) = ", C_LOC(u%DX_u%ptfmDef(1))
+   ! write(*, '(A, 3F10.5)') "u.DX_u.ptfmDef: ", u%DX_u%ptfmDef(1:3)
 
    ! if (p%TwrAero) then
    !    do j=1,p%NumTwrNds

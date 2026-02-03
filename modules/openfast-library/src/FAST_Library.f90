@@ -1113,8 +1113,10 @@ subroutine SetExtPtfmLoads_pointers(iTurb, ExtPtfmLd_iFromOF, ExtPtfmLd_pFromOF,
    TYPE(ExtPtfmLdDX_OutputType_C),    INTENT(INOUT) :: ExtPtfmLd_oToOF
 
    ! Inputs
-   ExtPtfmLd_iFromOF%ptfmDef_Len      = Turbine(iTurb)%ExtPtfmLd%u%DX_u%c_obj%ptfmDef_Len;      
-   ExtPtfmLd_iFromOF%ptfmDef          = Turbine(iTurb)%ExtPtfmLd%u%DX_u%c_obj%ptfmDef;      
+   ExtPtfmLd_iFromOF%ptfmDef_Len      = Turbine(iTurb)%ExtPtfmLd%Input(1)%DX_u%c_obj%ptfmDef_Len;      
+   ExtPtfmLd_iFromOF%ptfmDef          = Turbine(iTurb)%ExtPtfmLd%Input(1)%DX_u%c_obj%ptfmDef;      
+   print *, "ptfmDef ptr = ", ExtPtfmLd_iFromOF%ptfmDef
+
 
    ! Parameters
    ExtPtfmLd_pFromOF%ptfmRefPos_Len       = Turbine(iTurb)%ExtPtfmLd%p%DX_p%c_obj%ptfmRefPos_Len;

@@ -1,9 +1,14 @@
 #include "OpenFAST.H"
 #include "yaml-cpp/yaml.h"
+#include <cassert>
+#include <iomanip>
 #include <iostream>
+#include <ostream>
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <mpi.h>
 #include <vector>
+#include <array>
 
 inline bool checkFileExists(const std::string& name) {
     struct stat buffer;
@@ -47,10 +52,11 @@ void readTurbineData(int iTurb, fast::fastInputs & fi, YAML::Node turbNode) {
   get_if_present(turbNode, "turb_id", fi.globTurbineData[iTurb].TurbID, iTurb);
   std::string simType;
   get_if_present(turbNode, "sim_type", simType, std::string("ext-inflow"));
-  if (simType == "ext-loads")
-      fi.globTurbineData[iTurb].sType = fast::EXTLOADS;
-  else
-      fi.globTurbineData[iTurb].sType = fast::EXTINFLOW;
+    fi.globTurbineData[iTurb].sType = fast::EXTPTFMLOADS;
+//   if (simType == "ext-loads")
+//       fi.globTurbineData[iTurb].sType = fast::EXTLOADS;
+//   else
+//       fi.globTurbineData[iTurb].sType = fast::EXTINFLOW;
 
   std::string emptyString = "";
   get_if_present(turbNode, "FAST_input_filename", fi.globTurbineData[iTurb].FASTInputFileName);
@@ -80,6 +86,7 @@ void readTurbineData(int iTurb, fast::fastInputs & fi, YAML::Node turbNode) {
   get_if_present(turbNode, "nacelle_cd", fi.globTurbineData[iTurb].nacelle_cd, fZero);
   get_if_present(turbNode, "nacelle_area", fi.globTurbineData[iTurb].nacelle_area, fZero);
   get_if_present(turbNode, "air_density", fi.globTurbineData[iTurb].air_density, fZero);
+//   get_if_present(turbNode, "dt_FAST", fi.globTurbineData[iTurb].dtFAST, fZero);
 
   if (simType == "ext-loads") {
 
@@ -141,6 +148,7 @@ void readInputFile(fast::fastInputs & fi, std::string cInterfaceInputFile, doubl
         get_required(cDriverInp, "restart_freq", fi.restartFreq);
         get_if_present(cDriverInp, "output_freq", fi.outputFreq, 100);
         get_required(cDriverInp, "dt_driver", fi.dtDriver);
+        get_required(cDriverInp, "dt_FAST", fi.dtFAST);
         get_required(cDriverInp, "t_max", fi.tMax); // t_max is the total duration to which you want to run FAST. This should be the same or greater than the max time given in the FAST fst file.
         get_if_present(cDriverInp, "set_exp_law_wind", *setExpLawWind, false);
         get_if_present(cDriverInp, "set_uniform_x_blade_forces", *setUniformXBladeForces, false);
@@ -165,6 +173,62 @@ void readInputFile(fast::fastInputs & fi, std::string cInterfaceInputFile, doubl
   }
 
 }
+
+struct Vec3{
+    double x;
+    double y;
+    double z;
+};
+
+std::ostream& operator<<(std::ostream& os, const Vec3& vec) {
+    os << "[" << vec.x << ", " << vec.y << ", " << vec.z << "]";
+    return os;
+}
+
+struct Quaternion {
+    double w;
+    double x;
+    double y;
+    double z;
+};
+
+std::ostream& operator<<(std::ostream& os, const Quaternion& quat) {
+    os << "[" << quat.w << ", " << quat.x << ", " << quat.y << ", " << quat.z << "]";
+    return os;
+}
+
+struct Mat9{
+    std::array<double, 9> dcm;
+
+    double operator()(unsigned int row, unsigned int col) {
+        return get(row, col);
+    }
+
+    double get(unsigned int row, unsigned int col) const {
+        return dcm[3 * col + row];
+    }
+
+
+    Quaternion to_quat() const {
+        double qs = std::sqrt((1 + get(0, 0) + get(1, 1) + get(2, 2)) / 4);
+        double qi = (get(1, 2) - get(2, 1)) / (4 * qs);
+        double qj = (get(2, 0) - get(0, 2)) / (4 * qs);
+        double qk = (get(0, 1) - get(1, 0)) / (4 * qs);
+        return Quaternion{qs, qi, qj, qk};
+    }
+
+};
+
+struct PlatformPos {
+    Vec3 pos;
+    Mat9 rot;
+    Vec3 vel;
+    Vec3 rotVel;
+    Vec3 acc;
+    Vec3 rotAcc;
+};
+
+static_assert(sizeof(PlatformPos) == 24 * sizeof(double));
 
 int main(int argc, char** argv) {
 
@@ -269,20 +333,25 @@ int main(int argc, char** argv) {
             // Call this after enough outer iterations have been done
             FAST.advance_to_next_driver_time_step();
             // FAST.get_data_from_openfast(fast::timeStep::STATE_NP1);
+            const auto platformPos = FAST.getPlatformPos();
+            assert(platformPos.size() == 24);
 
-            FAST.getTowerDisplacements(towerDisp.data(), towerVel.data(), 0);
-            for (int i = 0; i < numForcePts; i++) {
-                double px, py, pz;
-                px = towerDisp[i * 6 + 0] + towerPos[i * 6 + 0];
-                py = towerDisp[i * 6 + 1] + towerPos[i * 6 + 1];
-                pz = towerDisp[i * 6 + 2] + towerPos[i * 6 + 2];
-                std::cout << "tower node " << i << " has pos " << px << ", " << py << ", " << pz << std::endl;
-                std::cout << "tower node " << i << " has vel " << towerVel[i * 6 + 0] << ", " << towerVel[i * 6 + 1] << ", " << towerVel[i * 6 + 2] << std::endl;
-            }
+
+
+            std::cout << "\n\n----------------------------\n\n";
+            const auto* pos = reinterpret_cast<const PlatformPos*>(platformPos.data());
+
+            // std::cout << "Platform pos ptr = " << (uintptr_t)(platformPos.data()) << std::endl;
+            std::cout << "Platform pos: " << pos->pos << "\n";
+            std::cout << "Platform rot: " << pos->rot.to_quat() << "\n";
+            std::cout << "Platform vel: " << pos->vel << "\n";
+            std::cout << "Platform omega: " << pos->rotVel << "\n";
+            std::cout << "\n----------------------------\n\n";
+
         }
         if (FAST.isDebug()) {
             FAST.computeTorqueThrust(0,torque,thrust);
-            std::cout.precision(16);
+            std::cout << std::setprecision(16);
             std::cout << "Torque = " << torque[0] << " " << torque[1] << " " << torque[2] << std::endl ;
             std::cout << "Thrust = " << thrust[0] << " " << thrust[1] << " " << thrust[2] << std::endl ;
         }

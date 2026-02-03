@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cassert>
 #include <array>
+#include <cmath>
+#include <math.h>
 
 inline void check_nc_error(int code, std::string msg) {
     if (code != 0)
@@ -745,6 +747,31 @@ void fast::OpenFAST::init() {
                         &extld_i_f_FAST[iTurb],
                         &extld_p_f_FAST[iTurb],
                         &extld_o_t_FAST[iTurb],
+                        &ErrStat,
+                        ErrMsg);
+                    checkError(ErrStat, ErrMsg);
+
+                    turbineData[iTurb].inflowType = 0;
+
+                } else if(turbineData[iTurb].sType == EXTPTFMLOADS) {
+
+                    char inputFileName[INTERFACE_STRING_LENGTH];
+                    FAST_ExtPtfmLoads_Init(
+                        &iTurb,
+                        &tMax,
+                        turbineData[iTurb].FASTInputFileName.data(),
+                        &turbineData[iTurb].TurbID,
+                        tmpOutFileRoot,
+                        turbineData[iTurb].TurbineBasePos.data(),
+                        &AbortErrLev,
+                        &dtDriver,
+                        &turbineData[iTurb].dt,
+                        &turbineData[iTurb].numBlades,
+                        &turbineData[iTurb].azBlendMean,
+                        &turbineData[iTurb].azBlendDelta,
+                        &extptfmld_i_f_FAST[iTurb],
+                        &extptfmld_p_f_FAST[iTurb],
+                        &extptfmld_o_t_FAST[iTurb],
                         &ErrStat,
                         ErrMsg);
                     checkError(ErrStat, ErrMsg);
@@ -1562,10 +1589,10 @@ void fast::OpenFAST::get_turbineParams(int iTurbGlob, turbineDataType & turbData
     turbData.air_density = turbineData[iTurbLoc].air_density;
     turbData.nBRfsiPtsBlade.resize(turbData.numBlades);
     turbData.nTotBRfsiPtsBlade = 0;
-    for (int i=0; i < turbData.numBlades; i++) {
-        turbData.nBRfsiPtsBlade[i] = turbineData[iTurbLoc].nBRfsiPtsBlade[i];
-        turbData.nTotBRfsiPtsBlade += turbData.nBRfsiPtsBlade[i];
-    }
+    // for (int i=0; i < turbData.numBlades; i++) {
+    //     turbData.nBRfsiPtsBlade[i] = turbineData[iTurbLoc].nBRfsiPtsBlade[i];
+    //     turbData.nTotBRfsiPtsBlade += turbData.nBRfsiPtsBlade[i];
+    // }
     turbData.nBRfsiPtsTwr = turbineData[iTurbLoc].nBRfsiPtsTwr;
     turbData.azBlendMean = turbineData[iTurbLoc].azBlendMean;
     turbData.azBlendDelta = turbineData[iTurbLoc].azBlendDelta;
@@ -1988,6 +2015,10 @@ void fast::OpenFAST::allocateMemory_preInit() {
     extld_i_f_FAST.resize(nTurbinesProc) ;
     extld_p_f_FAST.resize(nTurbinesProc) ;
     extld_o_t_FAST.resize(nTurbinesProc) ;
+
+    extptfmld_i_f_FAST.resize(nTurbinesProc);
+    extptfmld_p_f_FAST.resize(nTurbinesProc);
+    extptfmld_o_t_FAST.resize(nTurbinesProc);
 
 }
 
@@ -3158,4 +3189,8 @@ void fast::OpenFAST::setUniformXBladeForces(double loadX) {
         setBladeForces(fsiForceBlade, iTurbGlob, fast::STATE_NP1);
 
     }
+}
+
+std::span<const double> fast::OpenFAST::getPlatformPos() {
+    return {extptfmld_i_f_FAST[0].ptfmDef, static_cast<size_t>(extptfmld_i_f_FAST[0].ptfmDef_Len)};
 }

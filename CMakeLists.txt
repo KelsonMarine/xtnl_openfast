@@ -211,6 +211,7 @@ set(OPENFAST_MODULES
   externalinflow
   openfast-library
   simple-elastodyn
+  extptfmloads
 )
 
 set(OPENFAST_REGISTRY_INCLUDES "" CACHE INTERNAL "Registry includes paths")
