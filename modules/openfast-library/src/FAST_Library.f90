@@ -1115,7 +1115,6 @@ subroutine SetExtPtfmLoads_pointers(iTurb, ExtPtfmLd_iFromOF, ExtPtfmLd_pFromOF,
    ! Inputs
    ExtPtfmLd_iFromOF%ptfmDef_Len      = Turbine(iTurb)%ExtPtfmLd%Input(1)%DX_u%c_obj%ptfmDef_Len;      
    ExtPtfmLd_iFromOF%ptfmDef          = Turbine(iTurb)%ExtPtfmLd%Input(1)%DX_u%c_obj%ptfmDef;      
-   print *, "ptfmDef ptr = ", ExtPtfmLd_iFromOF%ptfmDef
 
 
    ! Parameters

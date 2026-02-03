@@ -226,9 +226,12 @@ struct PlatformPos {
     Vec3 rotVel;
     Vec3 acc;
     Vec3 rotAcc;
+
 };
 
+// Ensure there's no weirdness and the struct is packed as expected
 static_assert(sizeof(PlatformPos) == 24 * sizeof(double));
+
 
 int main(int argc, char** argv) {
 
@@ -338,7 +341,7 @@ int main(int argc, char** argv) {
 
 
 
-            std::cout << "\n\n----------------------------\n\n";
+            std::cout << "\n\n----------------------------\n";
             const auto* pos = reinterpret_cast<const PlatformPos*>(platformPos.data());
 
             // std::cout << "Platform pos ptr = " << (uintptr_t)(platformPos.data()) << std::endl;
@@ -346,7 +349,11 @@ int main(int argc, char** argv) {
             std::cout << "Platform rot: " << pos->rot.to_quat() << "\n";
             std::cout << "Platform vel: " << pos->vel << "\n";
             std::cout << "Platform omega: " << pos->rotVel << "\n";
-            std::cout << "\n----------------------------\n\n";
+            std::cout << "\n----------------------------\n";
+
+            auto platformLoad = FAST.getPlatformLoad();
+            std::fill(platformLoad.begin(), platformLoad.end(), 0.0);
+            platformLoad[2] = pos->pos.z * -10000000;
 
         }
         if (FAST.isDebug()) {

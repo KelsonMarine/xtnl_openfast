@@ -677,6 +677,7 @@ class OpenFAST {
   void setUniformXBladeForces(double loadX);
 
   std::span<const double> getPlatformPos();
+  std::span<double> getPlatformLoad();
 
 
 private:

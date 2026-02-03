@@ -3194,3 +3194,7 @@ void fast::OpenFAST::setUniformXBladeForces(double loadX) {
 std::span<const double> fast::OpenFAST::getPlatformPos() {
     return {extptfmld_i_f_FAST[0].ptfmDef, static_cast<size_t>(extptfmld_i_f_FAST[0].ptfmDef_Len)};
 }
+
+std::span<double> fast::OpenFAST::getPlatformLoad() {
+    return {extptfmld_o_t_FAST[0].ptfmLd, static_cast<size_t>(extptfmld_o_t_FAST[0].ptfmLd_Len)};
+}
