@@ -1,4 +1,5 @@
 #include "OpenFAST.H"
+#include "ipc_pipes.h"
 #include "yaml-cpp/yaml.h"
 #include <cassert>
 #include <iomanip>
@@ -9,6 +10,7 @@
 #include <mpi.h>
 #include <vector>
 #include <array>
+#include "ipc_pipes.H"
 
 inline bool checkFileExists(const std::string& name) {
     struct stat buffer;
@@ -305,6 +307,7 @@ int main(int argc, char** argv) {
     std::vector<double> towerPos(numForcePts * 6, 0.0);
 
     FAST.getTowerRefPositions(towerPos, iTurbLoc);
+    PipeChannel ch(PIPE_OFA_TO_OFO, PIPE_OFO_TO_OFA);
 
 
     for (int nt = ntStart; nt < ntEnd; nt++) {
@@ -339,6 +342,15 @@ int main(int argc, char** argv) {
             const auto platformPos = FAST.getPlatformPos();
             assert(platformPos.size() == 24);
 
+            auto platformLoad = FAST.getPlatformLoad();
+            SimMessage in = ch.recv();  // <-- blocks until A sends
+            std::cout << "[OpenFAST] Received from OpenFOAM: step=" << in.step
+                    << " tag=" << in.tag
+                    << " v0=" << in.values[0] << "\n";
+            // std::fill(platformLoad.begin(), platformLoad.end(), 0.0);
+            // platformLoad[2] = pos->pos.z * -10000000;
+            std::span<double> recv_vals{in.values, static_cast<size_t>(in.n_values)};
+            std::copy(platformLoad.begin(), platformLoad.end(), recv_vals.begin());
 
 
             std::cout << "\n\n----------------------------\n";
@@ -350,10 +362,22 @@ int main(int argc, char** argv) {
             std::cout << "Platform vel: " << pos->vel << "\n";
             std::cout << "Platform omega: " << pos->rotVel << "\n";
             std::cout << "\n----------------------------\n";
+            SimMessage out{};
+            out.step = nt;
+            // out.n_values = 3+4+3+3+3+3;
+            out.n_values = 3+4+3+3;
+            std::memcpy(&out.values[0], reinterpret_cast<const double*>(&pos->pos), 3 * sizeof(double));
+            const auto rot = pos->rot.to_quat();
+            std::memcpy(&out.values[3], reinterpret_cast<const double*>(&rot), 4 * sizeof(double));
+            std::memcpy(&out.values[7], reinterpret_cast<const double*>(&pos->vel), 3 * sizeof(double));
+            std::memcpy(&out.values[10], reinterpret_cast<const double*>(&pos->rotVel), 3 * sizeof(double));
+            // out.values[0] = in.values[0] * 2.0;   // e.g. coupled response
+            // out.values[1] = in.values[1] + 1.0;
+            // std::snprintf(out.tag, sizeof(out.tag), "B_step_%d", step);
 
-            auto platformLoad = FAST.getPlatformLoad();
-            std::fill(platformLoad.begin(), platformLoad.end(), 0.0);
-            platformLoad[2] = pos->pos.z * -10000000;
+
+
+            ch.send(out);
 
         }
         if (FAST.isDebug()) {
