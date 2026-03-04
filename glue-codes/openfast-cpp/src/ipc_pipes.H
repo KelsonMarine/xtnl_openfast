@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <iostream>
 
 // Adjust these paths as needed
 constexpr const char* PIPE_OFA_TO_OFO = "openfast_pos.fifo";
@@ -35,13 +36,19 @@ public:
     PipeChannel(const char* write_path, const char* read_path) {
         // Open order matters! Both sides must open write-end before read-end
         // to avoid deadlock. Open write end first (non-blocking), then read.
-        write_fd_ = ::open(write_path, O_WRONLY); // blocks until reader opens
-        if (write_fd_ < 0)
-            throw std::runtime_error(std::string("open write pipe failed: ") + strerror(errno));
 
+        std::cout << "opening " << read_path << "\n";
         read_fd_ = ::open(read_path, O_RDONLY);   // blocks until writer opens
         if (read_fd_ < 0)
             throw std::runtime_error(std::string("open read pipe failed: ") + strerror(errno));
+        std::cout << "finished opening " << read_path << "\n";
+
+        std::cout << "opening " << write_path << "\n";
+        write_fd_ = ::open(write_path, O_WRONLY); // blocks until reader opens
+        if (write_fd_ < 0)
+            throw std::runtime_error(std::string("open write pipe failed: ") + strerror(errno));
+        std::cout << "finished opening " << write_path << "\n";
+
     }
 
     ~PipeChannel() {
