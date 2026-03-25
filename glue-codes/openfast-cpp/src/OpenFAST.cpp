@@ -1175,6 +1175,13 @@ void fast::OpenFAST::prework() {
     }
 }
 
+void fast::OpenFAST::reset_turbines() {
+    for (int iTurb=0; iTurb < nTurbinesProc; iTurb++) {
+        FAST_CFD_Reset_SubStep(&iTurb, &nSubsteps_, &ErrStat, ErrMsg);
+        checkError(ErrStat, ErrMsg);
+    }
+}
+
 void fast::OpenFAST::update_states_driver_time_step(bool writeFiles) {
 
     if (firstPass_)

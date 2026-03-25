@@ -6,393 +6,484 @@
 #include <iostream>
 #include <ostream>
 #define _USE_MATH_DEFINES
+#include "ipc_pipes.H"
+#include <array>
 #include <cmath>
 #include <mpi.h>
 #include <vector>
-#include <array>
-#include "ipc_pipes.H"
+#include <sstream>
 
-inline bool checkFileExists(const std::string& name) {
-    struct stat buffer;
-    return (stat (name.c_str(), &buffer) == 0);
+inline bool checkFileExists(const std::string &name) {
+  struct stat buffer;
+  return (stat(name.c_str(), &buffer) == 0);
 }
 
-/// Optionally read in a value from a yaml node if present, else set it to a default value. Copied from github.com/Exawind/nalu-wind/include/NaluParsing.h
-template<typename T>
-void get_if_present(const YAML::Node & node, const std::string& key, T& result, const T& default_if_not_present = T())
-{
-    if (node[key]) {
-        const YAML::Node value = node[key];
-        result = value.as<T>();
-    }
-    else {
-        int rank;
-        int iErr = MPI_Comm_rank( MPI_COMM_WORLD, &rank);
-        if(!rank)
-            std::cout << key << " is missing in the input file. Proceeding with assumption " << key << " = " << default_if_not_present << std::endl ;
-        result = default_if_not_present;
-    }
+/// Optionally read in a value from a yaml node if present, else set it to a
+/// default value. Copied from
+/// github.com/Exawind/nalu-wind/include/NaluParsing.h
+template <typename T>
+void get_if_present(const YAML::Node &node, const std::string &key, T &result,
+                    const T &default_if_not_present = T()) {
+  if (node[key]) {
+    const YAML::Node value = node[key];
+    result = value.as<T>();
+  } else {
+    int rank;
+    int iErr = MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if (!rank)
+      std::cout << key
+                << " is missing in the input file. Proceeding with assumption "
+                << key << " = " << default_if_not_present << std::endl;
+    result = default_if_not_present;
+  }
 }
 
 /// Read a 'key' from a yaml node if it exists, else throw an error
-template<typename T>
-void get_required(const YAML::Node & node, const std::string& key, T& result)
-{
-    if (node[key]) {
-        const YAML::Node value = node[key];
-        result = value.as<T>();
-    }
-    else    {
-        throw std::runtime_error("Error: parsing missing required key: " + key);
-    }
+template <typename T>
+void get_required(const YAML::Node &node, const std::string &key, T &result) {
+  if (node[key]) {
+    const YAML::Node value = node[key];
+    result = value.as<T>();
+  } else {
+    throw std::runtime_error("Error: parsing missing required key: " + key);
+  }
 }
 
-void readTurbineData(int iTurb, fast::fastInputs & fi, YAML::Node turbNode) {
+void readTurbineData(int iTurb, fast::fastInputs &fi, YAML::Node turbNode) {
 
-  //Read turbine data for a given turbine using the YAML node
+  // Read turbine data for a given turbine using the YAML node
 
   get_if_present(turbNode, "turb_id", fi.globTurbineData[iTurb].TurbID, iTurb);
   std::string simType;
   get_if_present(turbNode, "sim_type", simType, std::string("ext-inflow"));
-    fi.globTurbineData[iTurb].sType = fast::EXTPTFMLOADS;
-//   if (simType == "ext-loads")
-//       fi.globTurbineData[iTurb].sType = fast::EXTLOADS;
-//   else
-//       fi.globTurbineData[iTurb].sType = fast::EXTINFLOW;
+  fi.globTurbineData[iTurb].sType = fast::EXTPTFMLOADS;
+  //   if (simType == "ext-loads")
+  //       fi.globTurbineData[iTurb].sType = fast::EXTLOADS;
+  //   else
+  //       fi.globTurbineData[iTurb].sType = fast::EXTINFLOW;
 
   std::string emptyString = "";
-  get_if_present(turbNode, "FAST_input_filename", fi.globTurbineData[iTurb].FASTInputFileName);
-  get_if_present(turbNode, "restart_filename", fi.globTurbineData[iTurb].FASTRestartFileName);
-  if ( (fi.globTurbineData[iTurb].FASTRestartFileName == emptyString) && (fi.globTurbineData[iTurb].FASTInputFileName == emptyString) )
-      throw std::runtime_error("Both FAST_input_filename and restart_filename are empty or not specified for Turbine " + std::to_string(iTurb));
+  get_if_present(turbNode, "FAST_input_filename",
+                 fi.globTurbineData[iTurb].FASTInputFileName);
+  get_if_present(turbNode, "restart_filename",
+                 fi.globTurbineData[iTurb].FASTRestartFileName);
+  if ((fi.globTurbineData[iTurb].FASTRestartFileName == emptyString) &&
+      (fi.globTurbineData[iTurb].FASTInputFileName == emptyString))
+    throw std::runtime_error("Both FAST_input_filename and restart_filename "
+                             "are empty or not specified for Turbine " +
+                             std::to_string(iTurb));
 
-  if (turbNode["turbine_base_pos"].IsSequence() ) {
-      fi.globTurbineData[iTurb].TurbineBasePos = turbNode["turbine_base_pos"].as<std::vector<float> >() ;
+  if (turbNode["turbine_base_pos"].IsSequence()) {
+    fi.globTurbineData[iTurb].TurbineBasePos =
+        turbNode["turbine_base_pos"].as<std::vector<float>>();
   } else {
-      fi.globTurbineData[iTurb].TurbineBasePos = std::vector<float>(3,0.0);
+    fi.globTurbineData[iTurb].TurbineBasePos = std::vector<float>(3, 0.0);
   }
 
-  if (turbNode["turbine_hub_pos"].IsSequence() ) {
-      fi.globTurbineData[iTurb].TurbineHubPos = turbNode["turbine_hub_pos"].as<std::vector<double> >() ;
+  if (turbNode["turbine_hub_pos"].IsSequence()) {
+    fi.globTurbineData[iTurb].TurbineHubPos =
+        turbNode["turbine_hub_pos"].as<std::vector<double>>();
   } else {
-      fi.globTurbineData[iTurb].TurbineHubPos =  std::vector<double>(3,0.0);
+    fi.globTurbineData[iTurb].TurbineHubPos = std::vector<double>(3, 0.0);
   }
 
-  get_if_present(turbNode, "num_force_pts_blade", fi.globTurbineData[iTurb].numForcePtsBlade, 0);
-  get_if_present(turbNode, "num_force_pts_tower", fi.globTurbineData[iTurb].numForcePtsTwr, 0);
+  get_if_present(turbNode, "num_force_pts_blade",
+                 fi.globTurbineData[iTurb].numForcePtsBlade, 0);
+  get_if_present(turbNode, "num_force_pts_tower",
+                 fi.globTurbineData[iTurb].numForcePtsTwr, 0);
   fi.globTurbineData[iTurb].numForcePts =
       fi.globTurbineData[iTurb].numForcePtsBlade +
       fi.globTurbineData[iTurb].numForcePtsTwr;
 
   float fZero = 0.0;
-  get_if_present(turbNode, "nacelle_cd", fi.globTurbineData[iTurb].nacelle_cd, fZero);
-  get_if_present(turbNode, "nacelle_area", fi.globTurbineData[iTurb].nacelle_area, fZero);
-  get_if_present(turbNode, "air_density", fi.globTurbineData[iTurb].air_density, fZero);
-//   get_if_present(turbNode, "dt_FAST", fi.globTurbineData[iTurb].dtFAST, fZero);
+  get_if_present(turbNode, "nacelle_cd", fi.globTurbineData[iTurb].nacelle_cd,
+                 fZero);
+  get_if_present(turbNode, "nacelle_area",
+                 fi.globTurbineData[iTurb].nacelle_area, fZero);
+  get_if_present(turbNode, "air_density", fi.globTurbineData[iTurb].air_density,
+                 fZero);
+  //   get_if_present(turbNode, "dt_FAST", fi.globTurbineData[iTurb].dtFAST,
+  //   fZero);
 
   if (simType == "ext-loads") {
 
-      get_if_present(turbNode, "az_blend_mean", fi.globTurbineData[iTurb].azBlendMean, 20*360.0*M_PI/180.0); //20 revs
-      get_if_present(turbNode, "az_blend_delta", fi.globTurbineData[iTurb].azBlendDelta, 3.0*360.0*M_PI/180.0);  // 3 rev
-
+    get_if_present(turbNode, "az_blend_mean",
+                   fi.globTurbineData[iTurb].azBlendMean,
+                   20 * 360.0 * M_PI / 180.0); // 20 revs
+    get_if_present(turbNode, "az_blend_delta",
+                   fi.globTurbineData[iTurb].azBlendDelta,
+                   3.0 * 360.0 * M_PI / 180.0); // 3 rev
   }
-
 }
 
-void readInputFile(fast::fastInputs & fi, std::string cInterfaceInputFile, double *tStart, double * tEnd, int * couplingMode, bool * setExpLawWind, bool * setUniformXBladeForces, int * nIter, double *xBladeForce) {
+void readInputFile(fast::fastInputs &fi, std::string cInterfaceInputFile,
+                   double *tStart, double *tEnd, int *couplingMode,
+                   bool *setExpLawWind, bool *setUniformXBladeForces,
+                   int *nIter, double *xBladeForce, int *numOuterIters) {
 
   fi.comm = MPI_COMM_WORLD;
 
   // Check if the input file exists and read it
-  if ( checkFileExists(cInterfaceInputFile) ) {
+  if (checkFileExists(cInterfaceInputFile)) {
 
     YAML::Node cDriverInp = YAML::LoadFile(cInterfaceInputFile);
     get_required(cDriverInp, "n_turbines_glob", fi.nTurbinesGlob);
 
     if (fi.nTurbinesGlob > 0) {
 
-        get_if_present(cDriverInp, "dry_run", fi.dryRun, false);
-        get_if_present(cDriverInp, "debug", fi.debug, false);
+      get_if_present(cDriverInp, "dry_run", fi.dryRun, false);
+      get_if_present(cDriverInp, "debug", fi.debug, false);
 
-        *couplingMode = 0; //CLASSIC is default
-        if(cDriverInp["coupling_mode"]) {
-            if ( cDriverInp["coupling_mode"].as<std::string>() == "strong" ) {
-                *couplingMode = 1;
-            } else if ( cDriverInp["coupling_mode"].as<std::string>() == "classic" ) {
-                *couplingMode = 0;
-            } else {
-                throw std::runtime_error("coupling_mode is not well defined in the input file");
-            }
-        }
-        if (cDriverInp["n_iter"]) {
-            *nIter = cDriverInp["n_iter"].as<int>();
-            if (*nIter < 0) {
-                *nIter = 1;
-            }
+      *couplingMode = 0; // CLASSIC is default
+      if (cDriverInp["coupling_mode"]) {
+        if (cDriverInp["coupling_mode"].as<std::string>() == "strong") {
+          *couplingMode = 1;
+        } else if (cDriverInp["coupling_mode"].as<std::string>() == "classic") {
+          *couplingMode = 0;
         } else {
-            *nIter = 1;
+          throw std::runtime_error(
+              "coupling_mode is not well defined in the input file");
         }
-
-        if(cDriverInp["sim_start"]) {
-            if (cDriverInp["sim_start"].as<std::string>() == "init") {
-                fi.simStart = fast::init;
-            } else if(cDriverInp["sim_start"].as<std::string>() == "trueRestart") {
-                fi.simStart = fast::trueRestart;
-            } else if(cDriverInp["sim_start"].as<std::string>() == "restartDriverInitFAST") {
-                fi.simStart = fast::restartDriverInitFAST;
-            } else {
-                throw std::runtime_error("sim_start is not well defined in the input file");
-            }
+      }
+      if (cDriverInp["n_iter"]) {
+        *nIter = cDriverInp["n_iter"].as<int>();
+        if (*nIter < 0) {
+          *nIter = 1;
         }
+      } else {
+        *nIter = 1;
+      }
 
-        get_required(cDriverInp, "t_start", *tStart);
-        get_required(cDriverInp, "t_end", *tEnd);
-        get_required(cDriverInp, "restart_freq", fi.restartFreq);
-        get_if_present(cDriverInp, "output_freq", fi.outputFreq, 100);
-        get_required(cDriverInp, "dt_driver", fi.dtDriver);
-        get_required(cDriverInp, "dt_FAST", fi.dtFAST);
-        get_required(cDriverInp, "t_max", fi.tMax); // t_max is the total duration to which you want to run FAST. This should be the same or greater than the max time given in the FAST fst file.
-        get_if_present(cDriverInp, "set_exp_law_wind", *setExpLawWind, false);
-        get_if_present(cDriverInp, "set_uniform_x_blade_forces", *setUniformXBladeForces, false);
-        if (setUniformXBladeForces)
-            get_if_present(cDriverInp, "x_blade_force", *xBladeForce, 0.0);
-
-        fi.globTurbineData.resize(fi.nTurbinesGlob);
-        for (int iTurb=0; iTurb < fi.nTurbinesGlob; iTurb++) {
-            if (cDriverInp["Turbine" + std::to_string(iTurb)]) {
-                readTurbineData(iTurb, fi, cDriverInp["Turbine" + std::to_string(iTurb)] );
-            } else {
-                throw std::runtime_error("Node for Turbine" + std::to_string(iTurb) + " not present in input file or I cannot read it");
-            }
+      if (cDriverInp["sim_start"]) {
+        if (cDriverInp["sim_start"].as<std::string>() == "init") {
+          fi.simStart = fast::init;
+        } else if (cDriverInp["sim_start"].as<std::string>() == "trueRestart") {
+          fi.simStart = fast::trueRestart;
+        } else if (cDriverInp["sim_start"].as<std::string>() ==
+                   "restartDriverInitFAST") {
+          fi.simStart = fast::restartDriverInitFAST;
+        } else {
+          throw std::runtime_error(
+              "sim_start is not well defined in the input file");
         }
+      }
+
+      get_required(cDriverInp, "t_start", *tStart);
+      get_required(cDriverInp, "t_end", *tEnd);
+      get_required(cDriverInp, "restart_freq", fi.restartFreq);
+      get_if_present(cDriverInp, "output_freq", fi.outputFreq, 100);
+      get_required(cDriverInp, "dt_driver", fi.dtDriver);
+      get_required(cDriverInp, "dt_FAST", fi.dtFAST);
+      get_required(cDriverInp, "t_max",
+                   fi.tMax); // t_max is the total duration to which you want to
+                             // run FAST. This should be the same or greater
+                             // than the max time given in the FAST fst file.
+      get_if_present(cDriverInp, "n_outer_iters", *numOuterIters, 1);
+      get_if_present(cDriverInp, "set_exp_law_wind", *setExpLawWind, false);
+      get_if_present(cDriverInp, "set_uniform_x_blade_forces",
+                     *setUniformXBladeForces, false);
+      if (setUniformXBladeForces)
+        get_if_present(cDriverInp, "x_blade_force", *xBladeForce, 0.0);
+
+      fi.globTurbineData.resize(fi.nTurbinesGlob);
+      for (int iTurb = 0; iTurb < fi.nTurbinesGlob; iTurb++) {
+        if (cDriverInp["Turbine" + std::to_string(iTurb)]) {
+          readTurbineData(iTurb, fi,
+                          cDriverInp["Turbine" + std::to_string(iTurb)]);
+        } else {
+          throw std::runtime_error(
+              "Node for Turbine" + std::to_string(iTurb) +
+              " not present in input file or I cannot read it");
+        }
+      }
 
     } else {
-        throw std::runtime_error("Number of turbines <= 0 ");
+      throw std::runtime_error("Number of turbines <= 0 ");
     }
 
   } else {
-      throw std::runtime_error("Input file " + cInterfaceInputFile + " does not exist or I cannot access it");
+    throw std::runtime_error("Input file " + cInterfaceInputFile +
+                             " does not exist or I cannot access it");
   }
-
 }
 
-struct Vec3{
-    double x;
-    double y;
-    double z;
+struct Vec3 {
+  double x;
+  double y;
+  double z;
 };
 
-std::ostream& operator<<(std::ostream& os, const Vec3& vec) {
-    os << "[" << vec.x << ", " << vec.y << ", " << vec.z << "]";
-    return os;
+Vec3 operator+(const Vec3 &a, const Vec3 &b) {
+  return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
+
+std::ostream &operator<<(std::ostream &os, const Vec3 &vec) {
+  os << "[" << vec.x << ", " << vec.y << ", " << vec.z << "]";
+  return os;
 }
 
 struct Quaternion {
-    double w;
-    double x;
-    double y;
-    double z;
+  double w;
+  double x;
+  double y;
+  double z;
 };
 
-std::ostream& operator<<(std::ostream& os, const Quaternion& quat) {
-    os << "[" << quat.w << ", " << quat.x << ", " << quat.y << ", " << quat.z << "]";
-    return os;
+std::ostream &operator<<(std::ostream &os, const Quaternion &quat) {
+  os << "[" << quat.w << ", " << quat.x << ", " << quat.y << ", " << quat.z
+     << "]";
+  return os;
 }
 
-struct Mat9{
-    std::array<double, 9> dcm;
+struct Mat9 {
+  std::array<double, 9> dcm;
 
-    double operator()(unsigned int row, unsigned int col) {
-        return get(row, col);
-    }
+  double operator()(unsigned int row, unsigned int col) {
+    return get(row, col);
+  }
 
-    double get(unsigned int row, unsigned int col) const {
-        return dcm[3 * col + row];
-    }
+  double get(unsigned int row, unsigned int col) const {
+    return dcm[3 * col + row];
+  }
 
-
-    Quaternion to_quat() const {
-        double qs = std::sqrt((1 + get(0, 0) + get(1, 1) + get(2, 2)) / 4);
-        double qi = (get(1, 2) - get(2, 1)) / (4 * qs);
-        double qj = (get(2, 0) - get(0, 2)) / (4 * qs);
-        double qk = (get(0, 1) - get(1, 0)) / (4 * qs);
-        return Quaternion{qs, qi, qj, qk};
-    }
-
+  Quaternion to_quat() const {
+    double qs = std::sqrt((1 + get(0, 0) + get(1, 1) + get(2, 2)) / 4);
+    double qi = (get(1, 2) - get(2, 1)) / (4 * qs);
+    double qj = (get(2, 0) - get(0, 2)) / (4 * qs);
+    double qk = (get(0, 1) - get(1, 0)) / (4 * qs);
+    return Quaternion{qs, qi, qj, qk};
+  }
 };
 
 struct PlatformPos {
-    Vec3 pos;
-    Mat9 rot;
-    Vec3 vel;
-    Vec3 rotVel;
-    Vec3 acc;
-    Vec3 rotAcc;
+  Vec3 pos;
+  Mat9 rot;
+  Vec3 vel;
+  Vec3 rotVel;
+  Vec3 acc;
+  Vec3 rotAcc;
 
+  void debug_print() const {
+    std::stringstream ss{};
+    ss << std::setprecision(8);
+
+    ss << "----------------------------\n";
+    ss << "Platform pos: " << pos << "\n";
+    ss << "Platform rot: " << rot.to_quat() << "\n";
+    ss << "Platform vel: " << vel << "\n";
+    ss << "Platform omega: " << rotVel << "\n";
+    ss << "Platform acc: " << acc << "\n";
+    ss << "----------------------------\n";
+
+    std::cout << ss.str();
+  }
+
+  void fill_message(SimMessage &out) const {
+    out.n_values = 3 + 4 + 3 + 3 + 3 + 3;
+    memset(out.values, 0, out.n_values * sizeof(double));
+    // out.n_values = 3+4+3+3;
+    std::memcpy(&out.values[0], reinterpret_cast<const double *>(&pos),
+                3 * sizeof(double));
+    const auto rot = this->rot.to_quat();
+    std::memcpy(&out.values[3], reinterpret_cast<const double *>(&rot),
+                4 * sizeof(double));
+    std::memcpy(&out.values[7], reinterpret_cast<const double *>(&vel),
+                3 * sizeof(double));
+    std::memcpy(&out.values[10], reinterpret_cast<const double *>(&rotVel),
+                3 * sizeof(double));
+    std::memcpy(&out.values[13], reinterpret_cast<const double *>(&acc),
+                3 * sizeof(double));
+    std::memcpy(&out.values[16], reinterpret_cast<const double *>(&rotAcc),
+                3 * sizeof(double));
+    // out.values[0] = in.values[0] * 2.0;   // e.g. coupled response
+    // out.values[1] = in.values[1] + 1.0;
+  }
 };
 
 // Ensure there's no weirdness and the struct is packed as expected
 static_assert(sizeof(PlatformPos) == 24 * sizeof(double));
 
+int main(int argc, char **argv) {
 
-int main(int argc, char** argv) {
+  if (argc != 2) {
+    std::cerr << "Incorrect syntax. Try: openfastcpp inputfile.yaml"
+              << std::endl;
+    return 1;
+  }
 
-    if (argc != 2) {
-        std::cerr << "Incorrect syntax. Try: openfastcpp inputfile.yaml" << std::endl ;
-        return 1;
-    }
+  int iErr;
+  int nProcs;
+  int rank;
+  std::vector<double> torque(3, 0.0);
+  std::vector<double> thrust(3, 0.0);
 
-    int iErr;
-    int nProcs;
-    int rank;
-    std::vector<double> torque (3, 0.0);
-    std::vector<double> thrust (3, 0.0);
+  iErr = MPI_Init(NULL, NULL);
+  iErr = MPI_Comm_size(MPI_COMM_WORLD, &nProcs);
+  iErr = MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    iErr = MPI_Init(NULL, NULL);
-    iErr = MPI_Comm_size( MPI_COMM_WORLD, &nProcs);
-    iErr = MPI_Comm_rank( MPI_COMM_WORLD, &rank);
+  int couplingMode; // CLASSIC (SOWFA style = 0) or STRONG (Conventional Serial
+                    // Staggered - allow for outer iterations = 1)
+  double tStart;    // This doesn't belong in the C++ API
+  double tEnd;      // This doesn't belong in the FAST - C++ interface
+  int ntStart, ntEnd; // This doesn't belong in the FAST - C++ interface
+  int nSubsteps;      //
+  bool setExpLawWind; // Set wind speed at Aerodyn nodes based on an exponential
+                      // profile. Useful for testing the C++ API before running
+                      // actuator line simulations.
+  bool setUniformXBladeForces; // Set uniform X blade forces on all blade nodes
+  int nIter;
+  double xBladeForce = 0.0;
+  int num_outer_iters = 1;
 
-    int couplingMode ; //CLASSIC (SOWFA style = 0) or STRONG (Conventional Serial Staggered - allow for outer iterations = 1)
-    double tStart; // This doesn't belong in the C++ API
-    double tEnd ; // This doesn't belong in the FAST - C++ interface
-    int ntStart, ntEnd ; // This doesn't belong in the FAST - C++ interface
-    int nSubsteps; //
-    bool setExpLawWind; // Set wind speed at Aerodyn nodes based on an exponential profile. Useful for testing the C++ API before running actuator line simulations.
-    bool setUniformXBladeForces; // Set uniform X blade forces on all blade nodes
-    int nIter;
-    double xBladeForce = 0.0;
+  std::string cDriverInputFile = argv[1];
+  fast::OpenFAST FAST;
+  fast::fastInputs fi;
+  try {
+    readInputFile(fi, cDriverInputFile, &tStart, &tEnd, &couplingMode,
+                  &setExpLawWind, &setUniformXBladeForces, &nIter, &xBladeForce,
+                  &num_outer_iters);
+  } catch (const std::runtime_error &ex) {
+    std::cerr << ex.what() << std::endl;
+    std::cerr << "Program quitting now" << std::endl;
+    return 1;
+  }
 
-    std::string cDriverInputFile=argv[1];
-    fast::OpenFAST FAST;
-    fast::fastInputs fi ;
-    try {
-        readInputFile(fi, cDriverInputFile, &tStart, &tEnd, &couplingMode, &setExpLawWind, &setUniformXBladeForces, &nIter, &xBladeForce);
-    } catch( const std::runtime_error & ex) {
-        std::cerr << ex.what() << std::endl ;
-        std::cerr << "Program quitting now" << std::endl ;
-        return 1;
-    }
+  FAST.setInputs(fi);
+  FAST.allocateTurbinesToProcsSimple();
+  // Or allocate turbines to procs by calling "setTurbineProcNo(iTurbGlob,
+  // procId)" for turbine.
 
-    FAST.setInputs(fi);
-    FAST.allocateTurbinesToProcsSimple();
-    // Or allocate turbines to procs by calling "setTurbineProcNo(iTurbGlob, procId)" for turbine.
+  FAST.init();
 
-    FAST.init();
+  nSubsteps = fi.dtDriver / FAST.get_timestep();
 
-    nSubsteps = fi.dtDriver/FAST.get_timestep();
-
-    if ( FAST.isDryRun() ) {
-        FAST.end() ;
-        MPI_Finalize() ;
-        return 0;
-    }
-
-    if (FAST.isTimeZero()) {
-        if (setExpLawWind)
-            FAST.setExpLawWindSpeed(0.0);
-
-        FAST.solution0();
-    }
-
-
-    ntStart = tStart/fi.dtDriver;  //Calculate the first time step
-    ntEnd = tEnd/fi.dtDriver;  //Calculate the last time step
-    int iTurbLoc = FAST.get_localTurbNo(0) ;
-    fast::turbineDataType turbineData{};
-    FAST.get_turbineParams(iTurbLoc, turbineData);
-    int numForcePts = turbineData.nBRfsiPtsTwr;
-    std::cout << "Num fsi points tower = " << numForcePts << std::endl;
-    std::vector<double> towerVel(numForcePts * 6, 0.0);
-    std::vector<double> towerDisp(numForcePts * 6, 0.0);
-    std::vector<double> towerPos(numForcePts * 6, 0.0);
-
-    FAST.getTowerRefPositions(towerPos, iTurbLoc);
-    PipeChannel ch(PIPE_OFA_TO_OFO, PIPE_OFO_TO_OFA);
-
-
-    for (int nt = ntStart; nt < ntEnd; nt++) {
-        if (couplingMode == 0) {
-            // If running with a CFD solver, sample velocities at the actuator/velocity nodes here
-            if (setExpLawWind)
-                FAST.setExpLawWindSpeed( (nt+1)*fi.dtDriver );
-            if (setUniformXBladeForces) {
-                FAST.setUniformXBladeForces(xBladeForce);
-            }
-
-            for (int iSubstep=1; iSubstep < nSubsteps; iSubstep++) {
-                FAST.step();
-                std::cout << "iSubstep = " << iSubstep << std::endl ;
-            }
-            // Get forces at actuator nodes and advance CFD solve by one time step here
-        } else {
-            for (int j=0; j < nIter; j++) {
-                // If running with a CFD solver, use 'FAST.predict_states()' to predict position and force at actuator nodes at the next time step on the first pass
-                // Run a CFD time step as a 'predictor' to get velocity at the next time step
-                // Sample and set velocity at the actuator/velocity nodes after the first cfd predictor
-                if (setExpLawWind)
-                    FAST.setExpLawWindSpeed( (nt+1)*fi.dtDriver );
-                if (setUniformXBladeForces) {
-                    FAST.setUniformXBladeForces(xBladeForce);
-                }
-                FAST.update_states_driver_time_step();
-            }
-            // Call this after enough outer iterations have been done
-            FAST.advance_to_next_driver_time_step();
-            // FAST.get_data_from_openfast(fast::timeStep::STATE_NP1);
-            const auto platformPos = FAST.getPlatformPos();
-            assert(platformPos.size() == 24);
-
-            auto platformLoad = FAST.getPlatformLoad();
-            SimMessage in = ch.recv();  // <-- blocks until A sends
-            std::cout << "[OpenFAST] Received from OpenFOAM: step=" << in.step
-                    << " tag=" << in.tag
-                    << " v0=" << in.values[0] << "\n";
-            // std::fill(platformLoad.begin(), platformLoad.end(), 0.0);
-            // platformLoad[2] = pos->pos.z * -10000000;
-            std::span<double> recv_vals{in.values, static_cast<size_t>(in.n_values)};
-            std::copy(recv_vals.begin(), recv_vals.end(), platformLoad.begin());
-
-
-            std::cout << "\n\n----------------------------\n";
-            const auto* pos = reinterpret_cast<const PlatformPos*>(platformPos.data());
-
-            // std::cout << "Platform pos ptr = " << (uintptr_t)(platformPos.data()) << std::endl;
-            std::cout << "Platform pos: " << pos->pos << "\n";
-            std::cout << "Platform rot: " << pos->rot.to_quat() << "\n";
-            std::cout << "Platform vel: " << pos->vel << "\n";
-            std::cout << "Platform omega: " << pos->rotVel << "\n";
-            std::cout << "\n----------------------------\n";
-            SimMessage out{};
-            out.step = nt;
-            out.n_values = 3+4+3+3+3+3;
-            memset(out.values, 0, out.n_values * sizeof(double));
-            // out.n_values = 3+4+3+3;
-            std::memcpy(&out.values[0], reinterpret_cast<const double*>(&pos->pos), 3 * sizeof(double));
-            const auto rot = pos->rot.to_quat();
-            std::memcpy(&out.values[3], reinterpret_cast<const double*>(&rot), 4 * sizeof(double));
-            std::memcpy(&out.values[7], reinterpret_cast<const double*>(&pos->vel), 3 * sizeof(double));
-            std::memcpy(&out.values[10], reinterpret_cast<const double*>(&pos->rotVel), 3 * sizeof(double));
-            std::memcpy(&out.values[13], reinterpret_cast<const double*>(&pos->acc), 3 * sizeof(double));
-            std::memcpy(&out.values[16], reinterpret_cast<const double*>(&pos->rotAcc), 3 * sizeof(double));
-            // out.values[0] = in.values[0] * 2.0;   // e.g. coupled response
-            // out.values[1] = in.values[1] + 1.0;
-            // std::snprintf(out.tag, sizeof(out.tag), "B_step_%d", step);
-
-
-
-            ch.send(out);
-
-        }
-        if (FAST.isDebug()) {
-            FAST.computeTorqueThrust(0,torque,thrust);
-            std::cout << std::setprecision(16);
-            std::cout << "Torque = " << torque[0] << " " << torque[1] << " " << torque[2] << std::endl ;
-            std::cout << "Thrust = " << thrust[0] << " " << thrust[1] << " " << thrust[2] << std::endl ;
-        }
-    }
-
-    FAST.end() ;
-    MPI_Finalize() ;
-
+  if (FAST.isDryRun()) {
+    FAST.end();
+    MPI_Finalize();
     return 0;
+  }
+
+  if (FAST.isTimeZero()) {
+    if (setExpLawWind)
+      FAST.setExpLawWindSpeed(0.0);
+
+    FAST.solution0();
+  }
+
+  ntStart = tStart / fi.dtDriver; // Calculate the first time step
+  ntEnd = tEnd / fi.dtDriver;     // Calculate the last time step
+  int iTurbLoc = FAST.get_localTurbNo(0);
+  fast::turbineDataType turbineData{};
+  FAST.get_turbineParams(iTurbLoc, turbineData);
+  int numForcePts = turbineData.nBRfsiPtsTwr;
+  std::cout << "Num fsi points tower = " << numForcePts << std::endl;
+  std::vector<double> towerVel(numForcePts * 6, 0.0);
+  std::vector<double> towerDisp(numForcePts * 6, 0.0);
+  std::vector<double> towerPos(numForcePts * 6, 0.0);
+
+  FAST.getTowerRefPositions(towerPos, iTurbLoc);
+  PipeChannel ch(PIPE_OFA_TO_OFO, PIPE_OFO_TO_OFA);
+
+  for (int nt = ntStart; nt < ntEnd; nt++) {
+    if (couplingMode == 0) {
+      // If running with a CFD solver, sample velocities at the
+      // actuator/velocity nodes here
+      if (setExpLawWind)
+        FAST.setExpLawWindSpeed((nt + 1) * fi.dtDriver);
+      if (setUniformXBladeForces) {
+        FAST.setUniformXBladeForces(xBladeForce);
+      }
+
+      for (int iSubstep = 1; iSubstep < nSubsteps; iSubstep++) {
+        FAST.step();
+        std::cout << "iSubstep = " << iSubstep << std::endl;
+      }
+      // Get forces at actuator nodes and advance CFD solve by one time step
+      // here
+    } else {
+      for (int j = 0; j < nIter; j++) {
+        // If running with a CFD solver, use 'FAST.predict_states()' to predict
+        // position and force at actuator nodes at the next time step on the
+        // first pass Run a CFD time step as a 'predictor' to get velocity at
+        // the next time step Sample and set velocity at the actuator/velocity
+        // nodes after the first cfd predictor
+        if (setExpLawWind)
+          FAST.setExpLawWindSpeed((nt + 1) * fi.dtDriver);
+        if (setUniformXBladeForces) {
+          FAST.setUniformXBladeForces(xBladeForce);
+        }
+        FAST.update_states_driver_time_step();
+      }
+      Vec3 lastForce{0, 0, 0};
+      for (int iter = 0; iter < num_outer_iters; iter++) {
+        std::cout << "Inner iter " << iter + 1 << "\n";
+        auto platformPos = FAST.getPlatformPos();
+        assert(platformPos.size() == 24);
+        const auto *pos =
+            reinterpret_cast<const PlatformPos *>(platformPos.data());
+        std::cout << "Starting pos:\n";
+        pos->debug_print();
+
+        // FAST.get_data_from_openfast(fast::timeStep::STATE_NP1);
+
+        auto platformLoad = FAST.getPlatformLoad();
+        SimMessage in = ch.recv(); // <-- blocks until A sends
+        std::cout << "[OpenFAST] Received from OpenFOAM: step=" << in.step
+                  << " tag=" << in.tag << " v0=" << in.values[0] << "\n";
+        // std::fill(platformLoad.begin(), platformLoad.end(), 0.0);
+        // platformLoad[2] = pos->pos.z * -10000000;
+        std::span<double> recv_vals{in.values,
+                                    static_cast<size_t>(in.n_values)};
+        std::copy(recv_vals.begin(), recv_vals.end(), platformLoad.begin());
+        // const double scale_factor = 343630;
+        const double scale_factor = 100000;
+        platformLoad[0] *= scale_factor;
+        platformLoad[1] *= scale_factor;
+        platformLoad[2] *= scale_factor;
+        // Vec3 platForce{platformLoad[0], platformLoad[1],platformLoad[2]};
+        // if (iter > 0 && (iter + 1) < num_outer_iters) {
+        //   platformLoad[0] = 0.5 * lastForce.x + 0.5 * platForce.x;
+        //   platformLoad[1] = 0.5 * lastForce.y + 0.5 * platForce.y;
+        //   platformLoad[2] = 0.5 * lastForce.z + 0.5 * platForce.z;
+        // }
+
+        // lastForce = Vec3{platformLoad[0], platformLoad[1],platformLoad[2]};
+
+        std::cout << "platformLoad = [" << platformLoad[0] << ", "
+                  << platformLoad[1] << ", " << platformLoad[2] << "]\n";
+
+        if (iter + 1 < num_outer_iters) {
+          FAST.update_states_driver_time_step();
+        } else {
+          // Call this after enough outer iterations have been done
+          FAST.advance_to_next_driver_time_step();
+        }
+
+        platformPos = FAST.getPlatformPos();
+        assert(platformPos.size() == 24);
+        pos = reinterpret_cast<const PlatformPos *>(platformPos.data());
+        pos->debug_print();
+
+        SimMessage out{};
+        out.step = nt;
+        pos->fill_message(out);
+        // std::snprintf(out.tag, sizeof(out.tag), "B_step_%d", step);
+        ch.send(out);
+
+      }
+    }
+    if (FAST.isDebug()) {
+      FAST.computeTorqueThrust(0, torque, thrust);
+      std::cout << std::setprecision(16);
+      std::cout << "Torque = " << torque[0] << " " << torque[1] << " "
+                << torque[2] << std::endl;
+      std::cout << "Thrust = " << thrust[0] << " " << thrust[1] << " "
+                << thrust[2] << std::endl;
+    }
+  }
+
+  FAST.end();
+  MPI_Finalize();
+
+  return 0;
 }

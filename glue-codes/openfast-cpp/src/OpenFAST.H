@@ -398,6 +398,8 @@ class OpenFAST {
   void init_velForceNodeData();
   //! Set up before every OpenFAST time step. Safe to call on all MPI ranks.
   void prework();
+  ///! Calls FAST_CFD_Reset_SubStep on all the turbines
+  void reset_turbines();
   //! Update states to next time step by calling FAST_AdvanceStates_T and CalcOutputs_And_SolveForInputs. Safe to call on all MPI ranks.
   void update_states_driver_time_step(bool writeFiles=true);
   //! Copy the final predicted states from step t_global_next to actual states for that step. Safe to call on all MPI ranks.

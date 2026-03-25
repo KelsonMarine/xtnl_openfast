@@ -5312,8 +5312,6 @@ SUBROUTINE SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD,
          CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
          ED%Input(1)%PlatformPtMesh%Force(:,1) = ExtPtfmLd%y%PtfmMesh%Force(:, 1)
          ED%Input(1)%PlatformPtMesh%Moment(:,1) = ExtPtfmLd%y%PtfmMesh%Moment(:, 1)
-         print *,"ExtPtfmLd%y%PtfmMesh%Force(:, 1) = ", ExtPtfmLd%y%PtfmMesh%Force(:, 1)
-         print *,"ExtPtfmLd%y%PtfmMesh%Moment(:, 1) = ", ExtPtfmLd%y%PtfmMesh%Moment(:, 1)
 
          CALL ED_CalcOutput( this_time, ED%Input(1), ED%p, ED%x(this_state), ED%xd(this_state), ED%z(this_state), ED%OtherSt(this_state), ED%y,  ED%m, ErrStat2, ErrMsg2 )
             CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )

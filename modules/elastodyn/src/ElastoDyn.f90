@@ -726,6 +726,8 @@ SUBROUTINE ED_CalcOutput( t, u, p, x, xd, z, OtherState, y, m, ErrStat, ErrMsg )
 
    ENDDO             ! I - All active (enabled) DOFs that contribute to the QD2T-related linear accelerations of the platform center of mass (point Y)
 
+   CALL ED_DebugPlatformLoads( t, p, u, m, FZHydro, MXHydro, FrcT0Trb, MomX0Trb, LinAccEZ, AngAccEX )
+
 
 
    DO K = 1,p%NumBl ! Loop through all blades
@@ -1851,6 +1853,107 @@ END IF
    
 
 END SUBROUTINE ED_CalcOutput
+!----------------------------------------------------------------------------------------------------------------------------------
+!> Temporary debug helper to print platform input loads and the resulting accelerations seen by ElastoDyn.
+SUBROUTINE ED_DebugPlatformLoads( t, p, u, m, FZHydro, MXHydro, FrcT0Trb, MomX0Trb, LinAccEZ, AngAccEX )
+!..................................................................................................................................
+
+   REAL(DbKi),             INTENT(IN   ) :: t
+   TYPE(ED_ParameterType), INTENT(IN   ) :: p
+   TYPE(ED_InputType),     INTENT(IN   ) :: u
+   TYPE(ED_MiscVarType),   INTENT(IN   ) :: m
+   REAL(ReKi),             INTENT(IN   ) :: FZHydro(3)
+   REAL(ReKi),             INTENT(IN   ) :: MXHydro(3)
+   REAL(ReKi),             INTENT(IN   ) :: FrcT0Trb(3)
+   REAL(ReKi),             INTENT(IN   ) :: MomX0Trb(3)
+   REAL(ReKi),             INTENT(IN   ) :: LinAccEZ(3)
+   REAL(ReKi),             INTENT(IN   ) :: AngAccEX(3)
+
+   REAL(ReKi)                             :: ForceED(3)
+   REAL(ReKi)                             :: MomentED(3)
+   REAL(ReKi)                             :: TowerBaseForceED(3)
+   REAL(ReKi)                             :: TowerBaseMomentED(3)
+   REAL(ReKi)                             :: TowerOnPlatformForceED(3)
+   REAL(ReKi)                             :: TowerOnPlatformMomentED(3)
+   REAL(ReKi)                             :: LinAccED(3)
+   REAL(ReKi)                             :: AngAccED(3)
+   REAL(ReKi)                             :: ApproxLinAccFromLoad(3)
+   REAL(ReKi)                             :: ApproxAngAccFromLoad(3)
+   REAL(ReKi), PARAMETER                  :: SmallDenom = 1.0E-12_ReKi
+   CHARACTER(1024)                        :: Msg
+
+   IF ( u%PlatformPtMesh%NNodes < 1 ) RETURN
+
+   ForceED(1)  =  DOT_PRODUCT( FZHydro , m%CoordSys%z1 )
+   ForceED(2)  = -DOT_PRODUCT( FZHydro , m%CoordSys%z3 )
+   ForceED(3)  =  DOT_PRODUCT( FZHydro , m%CoordSys%z2 )
+
+   MomentED(1) =  DOT_PRODUCT( MXHydro , m%CoordSys%z1 )
+   MomentED(2) = -DOT_PRODUCT( MXHydro , m%CoordSys%z3 )
+   MomentED(3) =  DOT_PRODUCT( MXHydro , m%CoordSys%z2 )
+
+   TowerBaseForceED(1) =  DOT_PRODUCT( FrcT0Trb, m%CoordSys%z1 )
+   TowerBaseForceED(2) = -DOT_PRODUCT( FrcT0Trb, m%CoordSys%z3 )
+   TowerBaseForceED(3) =  DOT_PRODUCT( FrcT0Trb, m%CoordSys%z2 )
+
+   TowerBaseMomentED(1) =  DOT_PRODUCT( MomX0Trb, m%CoordSys%z1 )
+   TowerBaseMomentED(2) = -DOT_PRODUCT( MomX0Trb, m%CoordSys%z3 )
+   TowerBaseMomentED(3) =  DOT_PRODUCT( MomX0Trb, m%CoordSys%z2 )
+
+   TowerOnPlatformForceED  = -TowerBaseForceED
+   TowerOnPlatformMomentED = -TowerBaseMomentED
+
+   LinAccED(1) =  DOT_PRODUCT( LinAccEZ, m%CoordSys%z1 )
+   LinAccED(2) = -DOT_PRODUCT( LinAccEZ, m%CoordSys%z3 )
+   LinAccED(3) =  DOT_PRODUCT( LinAccEZ, m%CoordSys%z2 )
+
+   AngAccED(1) =  DOT_PRODUCT( AngAccEX, m%CoordSys%z1 )
+   AngAccED(2) = -DOT_PRODUCT( AngAccEX, m%CoordSys%z3 )
+   AngAccED(3) =  DOT_PRODUCT( AngAccEX, m%CoordSys%z2 )
+
+   ApproxLinAccFromLoad = 0.0_ReKi
+   IF ( ABS( p%PtfmMass ) > SmallDenom ) THEN
+      ApproxLinAccFromLoad = u%PlatformPtMesh%Force(:,1) / p%PtfmMass
+   END IF
+
+   ApproxAngAccFromLoad = 0.0_ReKi
+   IF ( ABS( p%PtfmRIner ) > SmallDenom ) ApproxAngAccFromLoad(1) = u%PlatformPtMesh%Moment(1,1) / p%PtfmRIner
+   IF ( ABS( p%PtfmPIner ) > SmallDenom ) ApproxAngAccFromLoad(2) = u%PlatformPtMesh%Moment(2,1) / p%PtfmPIner
+   IF ( ABS( p%PtfmYIner ) > SmallDenom ) ApproxAngAccFromLoad(3) = u%PlatformPtMesh%Moment(3,1) / p%PtfmYIner
+
+   WRITE ( Msg, '(A,1X,ES12.5)' ) 'ED dbg platform loads at t=', REAL(t,ReKi)
+   CALL WrScr( TRIM(Msg) )
+
+   WRITE ( Msg, '(A,3(1X,ES12.5),A,3(1X,ES12.5))' ) &
+      '  input F(surge,sway,heave)=', u%PlatformPtMesh%Force(:,1), &
+      ' N; M(roll,pitch,yaw)=', u%PlatformPtMesh%Moment(:,1)
+   CALL WrScr( TRIM(Msg)//' N-m' )
+
+   WRITE ( Msg, '(A,3(1X,ES12.5),A,3(1X,ES12.5))' ) &
+      '  resolved F_ED=', ForceED, ' N; M_ED=', MomentED
+   CALL WrScr( TRIM(Msg)//' N-m' )
+
+   WRITE ( Msg, '(A,3(1X,ES12.5),A,3(1X,ES12.5))' ) &
+      '  tower-base load at T0=', TowerBaseForceED, ' N; M_T0=', TowerBaseMomentED
+   CALL WrScr( TRIM(Msg)//' N-m' )
+
+   WRITE ( Msg, '(A,3(1X,ES12.5),A,3(1X,ES12.5))' ) &
+      '  tower force/moment on platform=', TowerOnPlatformForceED, ' N; M=', TowerOnPlatformMomentED
+   CALL WrScr( TRIM(Msg)//' N-m' )
+
+   WRITE ( Msg, '(A,1X,ES12.5,A,3(1X,ES12.5))' ) &
+      '  platform mass=', p%PtfmMass, ' kg; inertia(R,P,Y)=', (/ p%PtfmRIner, p%PtfmPIner, p%PtfmYIner /)
+   CALL WrScr( TRIM(Msg)//' kg-m^2' )
+
+   WRITE ( Msg, '(A,3(1X,ES12.5),A,3(1X,ES12.5))' ) &
+      '  approx accel from input load only=', ApproxLinAccFromLoad, ' m/s^2; alpha~=', ApproxAngAccFromLoad
+   CALL WrScr( TRIM(Msg)//' rad/s^2' )
+
+   WRITE ( Msg, '(A,3(1X,ES12.5),A,3(1X,ES12.5))' ) &
+      '  total accel used by ED=', LinAccED, ' m/s^2; alpha=', AngAccED
+   CALL WrScr( TRIM(Msg)//' rad/s^2' )
+
+END SUBROUTINE ED_DebugPlatformLoads
 !----------------------------------------------------------------------------------------------------------------------------------
 !> Tight coupling routine for computing derivatives of continuous states.
 SUBROUTINE ED_CalcContStateDeriv( t, u, p, x, xd, z, OtherState, m, dxdt, ErrStat, ErrMsg )
