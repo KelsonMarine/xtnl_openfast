@@ -156,6 +156,9 @@ SUBROUTINE ExtPtfmLd_Init( InitInp, u, p, x, xd, z, OtherState, y, m, Interval, 
    CALL AllocPAry( y%DX_y%ptfmLd, 6, 'ptfmLd', ErrStat2, ErrMsg2 ); CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
    y%DX_y%c_obj%ptfmLd_Len = 6; y%DX_y%c_obj%ptfmLd = C_LOC( y%DX_y%ptfmLd(1) )
 
+   CALL AllocPAry( y%DX_y%ptfmAddedMass, 6*6, 'ptfmAddedMass', ErrStat2, ErrMsg2 ); CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   y%DX_y%c_obj%ptfmAddedMass_Len = 6*6; y%DX_y%c_obj%ptfmAddedMass = C_LOC( y%DX_y%ptfmAddedMass(1) )
+
    call ExtPtfmLd_SetInitOut(p, InitOut, errStat2, errMsg2)
       call SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName ) 
    

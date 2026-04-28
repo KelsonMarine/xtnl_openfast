@@ -5310,6 +5310,7 @@ SUBROUTINE SolveOption1(this_time, this_state, calcJacobian, p_FAST, ED, BD, HD,
       IF (p_FAST%CompHydro == Module_ExtPtfmLd) THEN
          CALL ExtPtfmLd_ConvertOpDataForOpenFAST(ExtPtfmLd%y, ExtPtfmLd%Input(1), ExtPtfmLd%m, ExtPtfmLd%p, ErrStat2, ErrMsg2)
          CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+         ED%Input(1)%PtfmAddedMass(:, :) = reshape(ExtPtfmLd%y%DX_y%ptfmAddedMass, (/6, 6/))
          ED%Input(1)%PlatformPtMesh%Force(:,1) = ExtPtfmLd%y%PtfmMesh%Force(:, 1)
          ED%Input(1)%PlatformPtMesh%Moment(:,1) = ExtPtfmLd%y%PtfmMesh%Moment(:, 1)
 

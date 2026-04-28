@@ -41,4 +41,5 @@ typedef ^       ParameterType  R8Ki            ptfmRefPos    {:}     -       -  
 
 # ..... Outputs ...................................................................................................................
 # Define outputs that are contained on the mesh here:
-typedef ^       OutputType      R8Ki            ptfmLd       {:}     -       -       "Loads on the platform  - Externally supplied"
+typedef ^       OutputType      R8Ki            ptfmLd         {:}     -       -       "Loads on the platform  - Externally supplied"
+typedef ^       OutputType      R8Ki            ptfmAddedMass  {:}     -       -       "Platform added mass matrix - Externally supplied"

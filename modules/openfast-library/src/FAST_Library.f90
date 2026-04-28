@@ -1118,13 +1118,16 @@ subroutine SetExtPtfmLoads_pointers(iTurb, ExtPtfmLd_iFromOF, ExtPtfmLd_pFromOF,
 
 
    ! Parameters
-   ExtPtfmLd_pFromOF%ptfmRefPos_Len       = Turbine(iTurb)%ExtPtfmLd%p%DX_p%c_obj%ptfmRefPos_Len;
+   ExtPtfmLd_pFromOF%ptfmRefPos_Len   = Turbine(iTurb)%ExtPtfmLd%p%DX_p%c_obj%ptfmRefPos_Len;
    ExtPtfmLd_pFromOF%ptfmRefPos       = Turbine(iTurb)%ExtPtfmLd%p%DX_p%c_obj%ptfmRefPos;
 
 
    ! Outputs
-   ExtPtfmLd_oToOF%ptfmLd_Len           = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmLd_Len;
-   ExtPtfmLd_oToOF%ptfmLd           = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmLd;
+   ExtPtfmLd_oToOF%ptfmLd_Len         = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmLd_Len;
+   ExtPtfmLd_oToOF%ptfmLd             = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmLd;
+
+   ExtPtfmLd_oToOF%ptfmAddedMass_Len  = Turbine(iTurb)%ExtPtfmLd%y%DX_y%C_obj%ptfmAddedMass_Len;
+   ExtPtfmLd_oToOF%ptfmAddedMass      = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmAddedMass;
 
  end subroutine SetExtPtfmLoads_pointers
 

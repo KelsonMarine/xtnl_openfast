@@ -31,6 +31,7 @@ typedef struct ExtPtfmLdDX_ParameterType {
 typedef struct ExtPtfmLdDX_OutputType {
 	void *object;
 	double *ptfmLd;             int ptfmLd_Len;
+	double *ptfmAddedMass;      int ptfmAddedMass_Len;
 } ExtPtfmLdDX_OutputType_t;
 
 typedef struct ExtPtfmLdDX_UserData {

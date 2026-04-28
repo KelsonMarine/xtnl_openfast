@@ -60,10 +60,13 @@ IMPLICIT NONE
    TYPE(C_PTR) :: object = C_NULL_PTR
     TYPE(C_ptr) :: ptfmLd = C_NULL_PTR 
     INTEGER(C_int) :: ptfmLd_Len = 0 
+    TYPE(C_ptr) :: ptfmAddedMass = C_NULL_PTR 
+    INTEGER(C_int) :: ptfmAddedMass_Len = 0 
   END TYPE ExtPtfmLdDX_OutputType_C
   TYPE, PUBLIC :: ExtPtfmLdDX_OutputType
     TYPE( ExtPtfmLdDX_OutputType_C ) :: C_obj
     REAL(KIND=C_DOUBLE) , DIMENSION(:), POINTER  :: ptfmLd => NULL()      !< Loads on the platform  - Externally supplied [-]
+    REAL(KIND=C_DOUBLE) , DIMENSION(:), POINTER  :: ptfmAddedMass => NULL()      !< Platform added mass matrix - Externally supplied [-]
   END TYPE ExtPtfmLdDX_OutputType
 ! =======================
 CONTAINS
@@ -354,6 +357,21 @@ subroutine ExtPtfmLdDX_CopyOutput(SrcOutputData, DstOutputData, CtrlCode, ErrSta
       end if
       DstOutputData%ptfmLd = SrcOutputData%ptfmLd
    end if
+   if (associated(SrcOutputData%ptfmAddedMass)) then
+      LB(1:1) = lbound(SrcOutputData%ptfmAddedMass)
+      UB(1:1) = ubound(SrcOutputData%ptfmAddedMass)
+      if (.not. associated(DstOutputData%ptfmAddedMass)) then
+         allocate(DstOutputData%ptfmAddedMass(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstOutputData%ptfmAddedMass.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+         DstOutputData%C_obj%ptfmAddedMass_Len = size(DstOutputData%ptfmAddedMass)
+         if (DstOutputData%C_obj%ptfmAddedMass_Len > 0) &
+            DstOutputData%C_obj%ptfmAddedMass = c_loc(DstOutputData%ptfmAddedMass(LB(1)))
+      end if
+      DstOutputData%ptfmAddedMass = SrcOutputData%ptfmAddedMass
+   end if
 end subroutine
 
 subroutine ExtPtfmLdDX_DestroyOutput(OutputData, ErrStat, ErrMsg)
@@ -369,6 +387,12 @@ subroutine ExtPtfmLdDX_DestroyOutput(OutputData, ErrStat, ErrMsg)
       OutputData%C_obj%ptfmLd = c_null_ptr
       OutputData%C_obj%ptfmLd_Len = 0
    end if
+   if (associated(OutputData%ptfmAddedMass)) then
+      deallocate(OutputData%ptfmAddedMass)
+      OutputData%ptfmAddedMass => null()
+      OutputData%C_obj%ptfmAddedMass = c_null_ptr
+      OutputData%C_obj%ptfmAddedMass_Len = 0
+   end if
 end subroutine
 
 subroutine ExtPtfmLdDX_PackOutput(RF, Indata)
@@ -383,6 +407,7 @@ subroutine ExtPtfmLdDX_PackOutput(RF, Indata)
       return
    end if
    call RegPackPtr(RF, InData%ptfmLd)
+   call RegPackPtr(RF, InData%ptfmAddedMass)
    if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
@@ -400,6 +425,11 @@ subroutine ExtPtfmLdDX_UnPackOutput(RF, OutData)
    if (associated(OutData%ptfmLd)) then
       OutData%C_obj%ptfmLd_Len = size(OutData%ptfmLd)
       if (OutData%C_obj%ptfmLd_Len > 0) OutData%C_obj%ptfmLd = c_loc(OutData%ptfmLd(LB(1)))
+   end if
+   call RegUnpackPtr(RF, OutData%ptfmAddedMass, LB, UB); if (RegCheckErr(RF, RoutineName)) return
+   if (associated(OutData%ptfmAddedMass)) then
+      OutData%C_obj%ptfmAddedMass_Len = size(OutData%ptfmAddedMass)
+      if (OutData%C_obj%ptfmAddedMass_Len > 0) OutData%C_obj%ptfmAddedMass = c_loc(OutData%ptfmAddedMass(LB(1)))
    end if
 end subroutine
 
@@ -425,6 +455,15 @@ SUBROUTINE ExtPtfmLdDX_C2Fary_CopyOutput(OutputData, ErrStat, ErrMsg, SkipPointe
          NULLIFY( OutputData%ptfmLd )
       ELSE
          CALL C_F_POINTER(OutputData%C_obj%ptfmLd, OutputData%ptfmLd, [OutputData%C_obj%ptfmLd_Len])
+      END IF
+   END IF
+   
+   ! -- ptfmAddedMass Output Data fields
+   IF ( .NOT. SkipPointers_local ) THEN
+      IF ( .NOT. C_ASSOCIATED( OutputData%C_obj%ptfmAddedMass ) ) THEN
+         NULLIFY( OutputData%ptfmAddedMass )
+      ELSE
+         CALL C_F_POINTER(OutputData%C_obj%ptfmAddedMass, OutputData%ptfmAddedMass, [OutputData%C_obj%ptfmAddedMass_Len])
       END IF
    END IF
 END SUBROUTINE
@@ -454,6 +493,18 @@ SUBROUTINE ExtPtfmLdDX_F2C_CopyOutput( OutputData, ErrStat, ErrMsg, SkipPointers
          OutputData%C_obj%ptfmLd_Len = SIZE(OutputData%ptfmLd)
          IF (OutputData%C_obj%ptfmLd_Len > 0) &
             OutputData%C_obj%ptfmLd = C_LOC(OutputData%ptfmLd(lbound(OutputData%ptfmLd,1)))
+      END IF
+   END IF
+   
+   ! -- ptfmAddedMass Output Data fields
+   IF (.NOT. SkipPointers_local ) THEN
+      IF (.NOT. ASSOCIATED(OutputData%ptfmAddedMass)) THEN 
+         OutputData%C_obj%ptfmAddedMass_Len = 0
+         OutputData%C_obj%ptfmAddedMass = C_NULL_PTR
+      ELSE
+         OutputData%C_obj%ptfmAddedMass_Len = SIZE(OutputData%ptfmAddedMass)
+         IF (OutputData%C_obj%ptfmAddedMass_Len > 0) &
+            OutputData%C_obj%ptfmAddedMass = C_LOC(OutputData%ptfmAddedMass(lbound(OutputData%ptfmAddedMass,1)))
       END IF
    END IF
 END SUBROUTINE
@@ -720,6 +771,9 @@ SUBROUTINE ExtPtfmLdDX_Output_ExtrapInterp1(y1, y2, tin, y_out, tin_out, ErrStat
    IF (ASSOCIATED(y_out%ptfmLd) .AND. ASSOCIATED(y1%ptfmLd)) THEN
       y_out%ptfmLd = a1*y1%ptfmLd + a2*y2%ptfmLd
    END IF ! check if allocated
+   IF (ASSOCIATED(y_out%ptfmAddedMass) .AND. ASSOCIATED(y1%ptfmAddedMass)) THEN
+      y_out%ptfmAddedMass = a1*y1%ptfmAddedMass + a2*y2%ptfmAddedMass
+   END IF ! check if allocated
 END SUBROUTINE
 
 SUBROUTINE ExtPtfmLdDX_Output_ExtrapInterp2(y1, y2, y3, tin, y_out, tin_out, ErrStat, ErrMsg )
@@ -779,6 +833,9 @@ SUBROUTINE ExtPtfmLdDX_Output_ExtrapInterp2(y1, y2, y3, tin, y_out, tin_out, Err
    a3 = (t_out - t(1))*(t_out - t(2))/((t(3) - t(1))*(t(3) - t(2)))
    IF (ASSOCIATED(y_out%ptfmLd) .AND. ASSOCIATED(y1%ptfmLd)) THEN
       y_out%ptfmLd = a1*y1%ptfmLd + a2*y2%ptfmLd + a3*y3%ptfmLd
+   END IF ! check if allocated
+   IF (ASSOCIATED(y_out%ptfmAddedMass) .AND. ASSOCIATED(y1%ptfmAddedMass)) THEN
+      y_out%ptfmAddedMass = a1*y1%ptfmAddedMass + a2*y2%ptfmAddedMass + a3*y3%ptfmAddedMass
    END IF ! check if allocated
 END SUBROUTINE
 END MODULE ExtPtfmLoadsDX_Types
