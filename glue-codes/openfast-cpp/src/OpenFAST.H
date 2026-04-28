@@ -680,6 +680,7 @@ class OpenFAST {
 
   std::span<const double> getPlatformPos();
   std::span<double> getPlatformLoad();
+  std::span<double> getPlatformAddedMass();
 
 
 private:

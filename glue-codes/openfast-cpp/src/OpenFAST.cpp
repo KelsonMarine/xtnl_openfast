@@ -3205,3 +3205,6 @@ std::span<const double> fast::OpenFAST::getPlatformPos() {
 std::span<double> fast::OpenFAST::getPlatformLoad() {
     return {extptfmld_o_t_FAST[0].ptfmLd, static_cast<size_t>(extptfmld_o_t_FAST[0].ptfmLd_Len)};
 }
+std::span<double> fast::OpenFAST::getPlatformAddedMass() {
+    return {extptfmld_o_t_FAST[0].ptfmAddedMass, static_cast<size_t>(extptfmld_o_t_FAST[0].ptfmAddedMass_Len)};
+}

@@ -434,12 +434,17 @@ int main(int argc, char **argv) {
         // platformLoad[2] = pos->pos.z * -10000000;
         std::span<double> recv_vals{in.values,
                                     static_cast<size_t>(in.n_values)};
-        std::copy(recv_vals.begin(), recv_vals.end(), platformLoad.begin());
+        std::copy(recv_vals.begin(), recv_vals.begin() + 6, platformLoad.begin());
         // const double scale_factor = 343630;
-        const double scale_factor = 100000;
+        const double scale_factor = 1;
         platformLoad[0] *= scale_factor;
         platformLoad[1] *= scale_factor;
         platformLoad[2] *= scale_factor;
+        platformLoad[3] *= scale_factor;
+        platformLoad[4] *= scale_factor;
+        platformLoad[5] *= scale_factor;
+        auto ptfmAddedMass = FAST.getPlatformAddedMass();
+        std::copy(recv_vals.begin() + 6, recv_vals.begin() + (6 + 36), ptfmAddedMass.begin());
         // Vec3 platForce{platformLoad[0], platformLoad[1],platformLoad[2]};
         // if (iter > 0 && (iter + 1) < num_outer_iters) {
         //   platformLoad[0] = 0.5 * lastForce.x + 0.5 * platForce.x;

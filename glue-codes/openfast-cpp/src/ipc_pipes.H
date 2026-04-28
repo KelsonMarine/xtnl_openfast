@@ -16,7 +16,7 @@ constexpr const char* PIPE_OFO_TO_OFA = "openfoam_forces.fifo";
 struct SimMessage {
     int    step;           // Simulation timestep
     int    n_values;       // Number of doubles following
-    double values[32];     // Your coupling data (resize as needed)
+    double values[64];     // Your coupling data (resize as needed)
     char   tag[32];        // Human-readable label for debugging
 };
 
