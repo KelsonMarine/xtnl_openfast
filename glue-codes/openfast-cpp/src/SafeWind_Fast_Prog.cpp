@@ -1,12 +1,11 @@
 #include "OpenFAST.H"
-#include "ipc_pipes.h"
+#include "ipc_pipes.H"
 #include "yaml-cpp/yaml.h"
 #include <cassert>
 #include <iomanip>
 #include <iostream>
 #include <ostream>
 #define _USE_MATH_DEFINES
-#include "ipc_pipes.H"
 #include <array>
 #include <cmath>
 #include <mpi.h>
