@@ -86,7 +86,7 @@ if (BUILD_OPENFAST_CPP_DRIVER)
     PUBLIC_HEADER DESTINATION include
   )
 
-  add_executable(safewindopenfastcpp src/SafeWind_FAST_Prog.cpp)
+  add_executable(safewindopenfastcpp src/SafeWind_Fast_Prog.cpp)
   target_link_libraries(safewindopenfastcpp 
     ${YAML_CPP_LIBRARIES}
     openfastcpplib 
