@@ -51,6 +51,7 @@ USE MAP_Types
 USE MoorDyn_Types
 USE OrcaFlexInterface_Types
 USE ExtPtfm_MCKF_Types
+USE ExtPtfmLoads_Types
 USE NWTC_Library
 IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: LooseCoupling                    = 1      ! Loose Module Coupling [-]
@@ -79,7 +80,8 @@ IMPLICIT NONE
     INTEGER(IntKi), PUBLIC, PARAMETER  :: Module_ADsk                      = 20      ! AeroDisk [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: Module_SED                       = 21      ! Simplified-ElastoDyn [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: Module_SlD                       = 22      ! SoilDyn [-]
-    INTEGER(IntKi), PUBLIC, PARAMETER  :: NumModules                       = 22      ! The number of modules available in FAST [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: Module_ExtPtfmLd                 = 23      ! Simplified-ElastoDyn [-]
+    INTEGER(IntKi), PUBLIC, PARAMETER  :: NumModules                       = 23      ! The number of modules available in FAST [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: MaxBladesBD                      = 3      ! Maximum number of blades allowed on a turbine [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: IceD_MaxLegs                     = 4      ! because I don't know how many legs there are before calling IceD_Init and I don't want to copy the data because of sibling mesh issues, I'm going to allocate IceD based on this number [-]
     INTEGER(IntKi), PUBLIC, PARAMETER  :: SS_Indx_Pitch                    = 1      ! pitch [-]
@@ -157,7 +159,7 @@ IMPLICIT NONE
     INTEGER(IntKi)  :: CompAero = 0_IntKi      !< Compute aerodynamic loads (switch) {Module_None; Module_ADsk; Module_AD} [-]
     INTEGER(IntKi)  :: CompServo = 0_IntKi      !< Compute control and electrical-drive dynamics (switch) {Module_None; Module_SrvD} [-]
     INTEGER(IntKi)  :: CompSeaSt = 0_IntKi      !< Compute sea states; wave kinematics (switch) {Module_None; Module_SeaSt} [-]
-    INTEGER(IntKi)  :: CompHydro = 0_IntKi      !< Compute hydrodynamic loads (switch) {Module_None; Module_HD} [-]
+    INTEGER(IntKi)  :: CompHydro = 0_IntKi      !< Compute hydrodynamic loads (switch) {Module_None; Module_HD; Module_ExtPtfmLd} [-]
     INTEGER(IntKi)  :: CompSub = 0_IntKi      !< Compute sub-structural dynamics (switch) {Module_None; Module_SD, Module_ExtPtfm, Module_SlD} [-]
     INTEGER(IntKi)  :: CompMooring = 0_IntKi      !< Compute mooring system (switch) {Module_None; Module_MAP; Module_FEAM; Module_MD; Module_Orca} [-]
     INTEGER(IntKi)  :: CompIce = 0_IntKi      !< Compute ice loading (switch) {Module_None; Module_IceF, Module_IceD} [-]
@@ -457,6 +459,19 @@ IMPLICIT NONE
     REAL(DbKi) , DIMENSION(:), ALLOCATABLE  :: InputTimes      !< Array of times associated with Input Array [-]
   END TYPE ExtPtfm_Data
 ! =======================
+! =========  ExtPtfmLd_Data  =======
+  TYPE, PUBLIC :: ExtPtfmLd_Data
+    TYPE(ExtPtfmLd_ContinuousStateType) , DIMENSION(:), ALLOCATABLE  :: x      !< Continuous states [-]
+    TYPE(ExtPtfmLd_DiscreteStateType) , DIMENSION(:), ALLOCATABLE  :: xd      !< Discrete states [-]
+    TYPE(ExtPtfmLd_ConstraintStateType) , DIMENSION(:), ALLOCATABLE  :: z      !< Constraint states [-]
+    TYPE(ExtPtfmLd_OtherStateType) , DIMENSION(:), ALLOCATABLE  :: OtherSt      !< Other states [-]
+    TYPE(ExtPtfmLd_ParameterType)  :: p      !< Parameters [-]
+    TYPE(ExtPtfmLd_OutputType)  :: y      !< System outputs [-]
+    TYPE(ExtPtfmLd_MiscVarType)  :: m      !< Misc/optimization variables [-]
+    TYPE(ExtPtfmLd_InputType) , DIMENSION(:), ALLOCATABLE  :: Input      !< Array of inputs associated with InputTimes [-]
+    REAL(DbKi) , DIMENSION(:), ALLOCATABLE  :: InputTimes      !< Array of times associated with Input Array [-]
+  END TYPE ExtPtfmLd_Data
+! =======================
 ! =========  SeaState_Data  =======
   TYPE, PUBLIC :: SeaState_Data
     TYPE(SeaSt_ContinuousStateType) , DIMENSION(:), ALLOCATABLE  :: x      !< Continuous states [-]
@@ -592,6 +607,8 @@ IMPLICIT NONE
     TYPE(ADsk_InitOutputType)  :: OutData_ADsk      !< ADsk Initialization output data [-]
     TYPE(ExtLd_InitInputType)  :: InData_ExtLd      !< ExtLd Initialization input data [-]
     TYPE(ExtLd_InitOutputType)  :: OutData_ExtLd      !< ExtLd Initialization output data [-]
+    TYPE(ExtPtfmLd_InitInputType)  :: InData_ExtPtfmLd      !< ExtPtfmLd Initialization input data [-]
+    TYPE(ExtPtfmLd_InitOutputType)  :: OutData_ExtPtfmLd      !< ExtPtfmLd Initialization output data [-]
     TYPE(InflowWind_InitInputType)  :: InData_IfW      !< IfW Initialization input data [-]
     TYPE(InflowWind_InitOutputType)  :: OutData_IfW      !< IfW Initialization output data [-]
     TYPE(ExtInfw_InitInputType)  :: InData_ExtInfw      !< ExtInfw Initialization input data [-]
@@ -657,6 +674,7 @@ IMPLICIT NONE
     TYPE(AeroDyn_Data)  :: AD      !< Data for the AeroDyn module [-]
     TYPE(AeroDisk_Data)  :: ADsk      !< Data for the AeroDisk module [-]
     TYPE(ExtLoads_Data)  :: ExtLd      !< Data for the External loads module [-]
+    TYPE(ExtPtfmLd_Data)  :: ExtPtfmLd      !< Data for the ExtPtfmLd (external platform loading) module [-]
     TYPE(InflowWind_Data)  :: IfW      !< Data for InflowWind module [-]
     TYPE(ExternalInflow_Data)  :: ExtInfw      !< Data for ExternalInflow integration module [-]
     TYPE(SeaState_Data)  :: SeaSt      !< Data for the SeaState module [-]
@@ -6466,6 +6484,328 @@ subroutine FAST_UnPackExtPtfm_Data(RF, OutData)
    call RegUnpackAlloc(RF, OutData%InputTimes); if (RegCheckErr(RF, RoutineName)) return
 end subroutine
 
+subroutine FAST_CopyExtPtfmLd_Data(SrcExtPtfmLd_DataData, DstExtPtfmLd_DataData, CtrlCode, ErrStat, ErrMsg)
+   type(ExtPtfmLd_Data), intent(inout) :: SrcExtPtfmLd_DataData
+   type(ExtPtfmLd_Data), intent(inout) :: DstExtPtfmLd_DataData
+   integer(IntKi),  intent(in   ) :: CtrlCode
+   integer(IntKi),  intent(  out) :: ErrStat
+   character(*),    intent(  out) :: ErrMsg
+   integer(B4Ki)   :: i1
+   integer(B4Ki)                  :: LB(1), UB(1)
+   integer(IntKi)                 :: ErrStat2
+   character(ErrMsgLen)           :: ErrMsg2
+   character(*), parameter        :: RoutineName = 'FAST_CopyExtPtfmLd_Data'
+   ErrStat = ErrID_None
+   ErrMsg  = ''
+   if (allocated(SrcExtPtfmLd_DataData%x)) then
+      LB(1:1) = lbound(SrcExtPtfmLd_DataData%x)
+      UB(1:1) = ubound(SrcExtPtfmLd_DataData%x)
+      if (.not. allocated(DstExtPtfmLd_DataData%x)) then
+         allocate(DstExtPtfmLd_DataData%x(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstExtPtfmLd_DataData%x.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_CopyContState(SrcExtPtfmLd_DataData%x(i1), DstExtPtfmLd_DataData%x(i1), CtrlCode, ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         if (ErrStat >= AbortErrLev) return
+      end do
+   end if
+   if (allocated(SrcExtPtfmLd_DataData%xd)) then
+      LB(1:1) = lbound(SrcExtPtfmLd_DataData%xd)
+      UB(1:1) = ubound(SrcExtPtfmLd_DataData%xd)
+      if (.not. allocated(DstExtPtfmLd_DataData%xd)) then
+         allocate(DstExtPtfmLd_DataData%xd(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstExtPtfmLd_DataData%xd.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_CopyDiscState(SrcExtPtfmLd_DataData%xd(i1), DstExtPtfmLd_DataData%xd(i1), CtrlCode, ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         if (ErrStat >= AbortErrLev) return
+      end do
+   end if
+   if (allocated(SrcExtPtfmLd_DataData%z)) then
+      LB(1:1) = lbound(SrcExtPtfmLd_DataData%z)
+      UB(1:1) = ubound(SrcExtPtfmLd_DataData%z)
+      if (.not. allocated(DstExtPtfmLd_DataData%z)) then
+         allocate(DstExtPtfmLd_DataData%z(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstExtPtfmLd_DataData%z.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_CopyConstrState(SrcExtPtfmLd_DataData%z(i1), DstExtPtfmLd_DataData%z(i1), CtrlCode, ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         if (ErrStat >= AbortErrLev) return
+      end do
+   end if
+   if (allocated(SrcExtPtfmLd_DataData%OtherSt)) then
+      LB(1:1) = lbound(SrcExtPtfmLd_DataData%OtherSt)
+      UB(1:1) = ubound(SrcExtPtfmLd_DataData%OtherSt)
+      if (.not. allocated(DstExtPtfmLd_DataData%OtherSt)) then
+         allocate(DstExtPtfmLd_DataData%OtherSt(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstExtPtfmLd_DataData%OtherSt.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_CopyOtherState(SrcExtPtfmLd_DataData%OtherSt(i1), DstExtPtfmLd_DataData%OtherSt(i1), CtrlCode, ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         if (ErrStat >= AbortErrLev) return
+      end do
+   end if
+   call ExtPtfmLd_CopyParam(SrcExtPtfmLd_DataData%p, DstExtPtfmLd_DataData%p, CtrlCode, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (ErrStat >= AbortErrLev) return
+   call ExtPtfmLd_CopyOutput(SrcExtPtfmLd_DataData%y, DstExtPtfmLd_DataData%y, CtrlCode, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (ErrStat >= AbortErrLev) return
+   call ExtPtfmLd_CopyMisc(SrcExtPtfmLd_DataData%m, DstExtPtfmLd_DataData%m, CtrlCode, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (ErrStat >= AbortErrLev) return
+   if (allocated(SrcExtPtfmLd_DataData%Input)) then
+      LB(1:1) = lbound(SrcExtPtfmLd_DataData%Input)
+      UB(1:1) = ubound(SrcExtPtfmLd_DataData%Input)
+      if (.not. allocated(DstExtPtfmLd_DataData%Input)) then
+         allocate(DstExtPtfmLd_DataData%Input(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstExtPtfmLd_DataData%Input.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_CopyInput(SrcExtPtfmLd_DataData%Input(i1), DstExtPtfmLd_DataData%Input(i1), CtrlCode, ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+         if (ErrStat >= AbortErrLev) return
+      end do
+   end if
+   if (allocated(SrcExtPtfmLd_DataData%InputTimes)) then
+      LB(1:1) = lbound(SrcExtPtfmLd_DataData%InputTimes)
+      UB(1:1) = ubound(SrcExtPtfmLd_DataData%InputTimes)
+      if (.not. allocated(DstExtPtfmLd_DataData%InputTimes)) then
+         allocate(DstExtPtfmLd_DataData%InputTimes(LB(1):UB(1)), stat=ErrStat2)
+         if (ErrStat2 /= 0) then
+            call SetErrStat(ErrID_Fatal, 'Error allocating DstExtPtfmLd_DataData%InputTimes.', ErrStat, ErrMsg, RoutineName)
+            return
+         end if
+      end if
+      DstExtPtfmLd_DataData%InputTimes = SrcExtPtfmLd_DataData%InputTimes
+   end if
+end subroutine
+
+subroutine FAST_DestroyExtPtfmLd_Data(ExtPtfmLd_DataData, ErrStat, ErrMsg)
+   type(ExtPtfmLd_Data), intent(inout) :: ExtPtfmLd_DataData
+   integer(IntKi),  intent(  out) :: ErrStat
+   character(*),    intent(  out) :: ErrMsg
+   integer(B4Ki)   :: i1
+   integer(B4Ki)   :: LB(1), UB(1)
+   integer(IntKi)                 :: ErrStat2
+   character(ErrMsgLen)           :: ErrMsg2
+   character(*), parameter        :: RoutineName = 'FAST_DestroyExtPtfmLd_Data'
+   ErrStat = ErrID_None
+   ErrMsg  = ''
+   if (allocated(ExtPtfmLd_DataData%x)) then
+      LB(1:1) = lbound(ExtPtfmLd_DataData%x)
+      UB(1:1) = ubound(ExtPtfmLd_DataData%x)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_DestroyContState(ExtPtfmLd_DataData%x(i1), ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      end do
+      deallocate(ExtPtfmLd_DataData%x)
+   end if
+   if (allocated(ExtPtfmLd_DataData%xd)) then
+      LB(1:1) = lbound(ExtPtfmLd_DataData%xd)
+      UB(1:1) = ubound(ExtPtfmLd_DataData%xd)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_DestroyDiscState(ExtPtfmLd_DataData%xd(i1), ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      end do
+      deallocate(ExtPtfmLd_DataData%xd)
+   end if
+   if (allocated(ExtPtfmLd_DataData%z)) then
+      LB(1:1) = lbound(ExtPtfmLd_DataData%z)
+      UB(1:1) = ubound(ExtPtfmLd_DataData%z)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_DestroyConstrState(ExtPtfmLd_DataData%z(i1), ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      end do
+      deallocate(ExtPtfmLd_DataData%z)
+   end if
+   if (allocated(ExtPtfmLd_DataData%OtherSt)) then
+      LB(1:1) = lbound(ExtPtfmLd_DataData%OtherSt)
+      UB(1:1) = ubound(ExtPtfmLd_DataData%OtherSt)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_DestroyOtherState(ExtPtfmLd_DataData%OtherSt(i1), ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      end do
+      deallocate(ExtPtfmLd_DataData%OtherSt)
+   end if
+   call ExtPtfmLd_DestroyParam(ExtPtfmLd_DataData%p, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   call ExtPtfmLd_DestroyOutput(ExtPtfmLd_DataData%y, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   call ExtPtfmLd_DestroyMisc(ExtPtfmLd_DataData%m, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (allocated(ExtPtfmLd_DataData%Input)) then
+      LB(1:1) = lbound(ExtPtfmLd_DataData%Input)
+      UB(1:1) = ubound(ExtPtfmLd_DataData%Input)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_DestroyInput(ExtPtfmLd_DataData%Input(i1), ErrStat2, ErrMsg2)
+         call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      end do
+      deallocate(ExtPtfmLd_DataData%Input)
+   end if
+   if (allocated(ExtPtfmLd_DataData%InputTimes)) then
+      deallocate(ExtPtfmLd_DataData%InputTimes)
+   end if
+end subroutine
+
+subroutine FAST_PackExtPtfmLd_Data(RF, Indata)
+   type(RegFile), intent(inout) :: RF
+   type(ExtPtfmLd_Data), intent(in) :: InData
+   character(*), parameter         :: RoutineName = 'FAST_PackExtPtfmLd_Data'
+   integer(B4Ki)   :: i1
+   integer(B4Ki)   :: LB(1), UB(1)
+   if (RF%ErrStat >= AbortErrLev) return
+   call RegPack(RF, allocated(InData%x))
+   if (allocated(InData%x)) then
+      call RegPackBounds(RF, 1, lbound(InData%x), ubound(InData%x))
+      LB(1:1) = lbound(InData%x)
+      UB(1:1) = ubound(InData%x)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_PackContState(RF, InData%x(i1)) 
+      end do
+   end if
+   call RegPack(RF, allocated(InData%xd))
+   if (allocated(InData%xd)) then
+      call RegPackBounds(RF, 1, lbound(InData%xd), ubound(InData%xd))
+      LB(1:1) = lbound(InData%xd)
+      UB(1:1) = ubound(InData%xd)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_PackDiscState(RF, InData%xd(i1)) 
+      end do
+   end if
+   call RegPack(RF, allocated(InData%z))
+   if (allocated(InData%z)) then
+      call RegPackBounds(RF, 1, lbound(InData%z), ubound(InData%z))
+      LB(1:1) = lbound(InData%z)
+      UB(1:1) = ubound(InData%z)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_PackConstrState(RF, InData%z(i1)) 
+      end do
+   end if
+   call RegPack(RF, allocated(InData%OtherSt))
+   if (allocated(InData%OtherSt)) then
+      call RegPackBounds(RF, 1, lbound(InData%OtherSt), ubound(InData%OtherSt))
+      LB(1:1) = lbound(InData%OtherSt)
+      UB(1:1) = ubound(InData%OtherSt)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_PackOtherState(RF, InData%OtherSt(i1)) 
+      end do
+   end if
+   call ExtPtfmLd_PackParam(RF, InData%p) 
+   call ExtPtfmLd_PackOutput(RF, InData%y) 
+   call ExtPtfmLd_PackMisc(RF, InData%m) 
+   call RegPack(RF, allocated(InData%Input))
+   if (allocated(InData%Input)) then
+      call RegPackBounds(RF, 1, lbound(InData%Input), ubound(InData%Input))
+      LB(1:1) = lbound(InData%Input)
+      UB(1:1) = ubound(InData%Input)
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_PackInput(RF, InData%Input(i1)) 
+      end do
+   end if
+   call RegPackAlloc(RF, InData%InputTimes)
+   if (RegCheckErr(RF, RoutineName)) return
+end subroutine
+
+subroutine FAST_UnPackExtPtfmLd_Data(RF, OutData)
+   type(RegFile), intent(inout)    :: RF
+   type(ExtPtfmLd_Data), intent(inout) :: OutData
+   character(*), parameter            :: RoutineName = 'FAST_UnPackExtPtfmLd_Data'
+   integer(B4Ki)   :: i1
+   integer(B4Ki)   :: LB(1), UB(1)
+   integer(IntKi)  :: stat
+   logical         :: IsAllocAssoc
+   if (RF%ErrStat /= ErrID_None) return
+   if (allocated(OutData%x)) deallocate(OutData%x)
+   call RegUnpack(RF, IsAllocAssoc); if (RegCheckErr(RF, RoutineName)) return
+   if (IsAllocAssoc) then
+      call RegUnpackBounds(RF, 1, LB, UB); if (RegCheckErr(RF, RoutineName)) return
+      allocate(OutData%x(LB(1):UB(1)),stat=stat)
+      if (stat /= 0) then 
+         call SetErrStat(ErrID_Fatal, 'Error allocating OutData%x.', RF%ErrStat, RF%ErrMsg, RoutineName)
+         return
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_UnpackContState(RF, OutData%x(i1)) ! x 
+      end do
+   end if
+   if (allocated(OutData%xd)) deallocate(OutData%xd)
+   call RegUnpack(RF, IsAllocAssoc); if (RegCheckErr(RF, RoutineName)) return
+   if (IsAllocAssoc) then
+      call RegUnpackBounds(RF, 1, LB, UB); if (RegCheckErr(RF, RoutineName)) return
+      allocate(OutData%xd(LB(1):UB(1)),stat=stat)
+      if (stat /= 0) then 
+         call SetErrStat(ErrID_Fatal, 'Error allocating OutData%xd.', RF%ErrStat, RF%ErrMsg, RoutineName)
+         return
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_UnpackDiscState(RF, OutData%xd(i1)) ! xd 
+      end do
+   end if
+   if (allocated(OutData%z)) deallocate(OutData%z)
+   call RegUnpack(RF, IsAllocAssoc); if (RegCheckErr(RF, RoutineName)) return
+   if (IsAllocAssoc) then
+      call RegUnpackBounds(RF, 1, LB, UB); if (RegCheckErr(RF, RoutineName)) return
+      allocate(OutData%z(LB(1):UB(1)),stat=stat)
+      if (stat /= 0) then 
+         call SetErrStat(ErrID_Fatal, 'Error allocating OutData%z.', RF%ErrStat, RF%ErrMsg, RoutineName)
+         return
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_UnpackConstrState(RF, OutData%z(i1)) ! z 
+      end do
+   end if
+   if (allocated(OutData%OtherSt)) deallocate(OutData%OtherSt)
+   call RegUnpack(RF, IsAllocAssoc); if (RegCheckErr(RF, RoutineName)) return
+   if (IsAllocAssoc) then
+      call RegUnpackBounds(RF, 1, LB, UB); if (RegCheckErr(RF, RoutineName)) return
+      allocate(OutData%OtherSt(LB(1):UB(1)),stat=stat)
+      if (stat /= 0) then 
+         call SetErrStat(ErrID_Fatal, 'Error allocating OutData%OtherSt.', RF%ErrStat, RF%ErrMsg, RoutineName)
+         return
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_UnpackOtherState(RF, OutData%OtherSt(i1)) ! OtherSt 
+      end do
+   end if
+   call ExtPtfmLd_UnpackParam(RF, OutData%p) ! p 
+   call ExtPtfmLd_UnpackOutput(RF, OutData%y) ! y 
+   call ExtPtfmLd_UnpackMisc(RF, OutData%m) ! m 
+   if (allocated(OutData%Input)) deallocate(OutData%Input)
+   call RegUnpack(RF, IsAllocAssoc); if (RegCheckErr(RF, RoutineName)) return
+   if (IsAllocAssoc) then
+      call RegUnpackBounds(RF, 1, LB, UB); if (RegCheckErr(RF, RoutineName)) return
+      allocate(OutData%Input(LB(1):UB(1)),stat=stat)
+      if (stat /= 0) then 
+         call SetErrStat(ErrID_Fatal, 'Error allocating OutData%Input.', RF%ErrStat, RF%ErrMsg, RoutineName)
+         return
+      end if
+      do i1 = LB(1), UB(1)
+         call ExtPtfmLd_UnpackInput(RF, OutData%Input(i1)) ! Input 
+      end do
+   end if
+   call RegUnpackAlloc(RF, OutData%InputTimes); if (RegCheckErr(RF, RoutineName)) return
+end subroutine
+
 subroutine FAST_CopySeaState_Data(SrcSeaState_DataData, DstSeaState_DataData, CtrlCode, ErrStat, ErrMsg)
    type(SeaState_Data), intent(in) :: SrcSeaState_DataData
    type(SeaState_Data), intent(inout) :: DstSeaState_DataData
@@ -8924,6 +9264,12 @@ subroutine FAST_CopyInitData(SrcInitDataData, DstInitDataData, CtrlCode, ErrStat
    call ExtLd_CopyInitOutput(SrcInitDataData%OutData_ExtLd, DstInitDataData%OutData_ExtLd, CtrlCode, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    if (ErrStat >= AbortErrLev) return
+   call ExtPtfmLd_CopyInitInput(SrcInitDataData%InData_ExtPtfmLd, DstInitDataData%InData_ExtPtfmLd, CtrlCode, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (ErrStat >= AbortErrLev) return
+   call ExtPtfmLd_CopyInitOutput(SrcInitDataData%OutData_ExtPtfmLd, DstInitDataData%OutData_ExtPtfmLd, CtrlCode, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (ErrStat >= AbortErrLev) return
    call InflowWind_CopyInitInput(SrcInitDataData%InData_IfW, DstInitDataData%InData_IfW, CtrlCode, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    if (ErrStat >= AbortErrLev) return
@@ -9064,6 +9410,10 @@ subroutine FAST_DestroyInitData(InitDataData, ErrStat, ErrMsg)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    call ExtLd_DestroyInitOutput(InitDataData%OutData_ExtLd, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   call ExtPtfmLd_DestroyInitInput(InitDataData%InData_ExtPtfmLd, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   call ExtPtfmLd_DestroyInitOutput(InitDataData%OutData_ExtPtfmLd, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    call InflowWind_DestroyInitInput(InitDataData%InData_IfW, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    call InflowWind_DestroyInitOutput(InitDataData%OutData_IfW, ErrStat2, ErrMsg2)
@@ -9163,6 +9513,8 @@ subroutine FAST_PackInitData(RF, Indata)
    call ADsk_PackInitOutput(RF, InData%OutData_ADsk) 
    call ExtLd_PackInitInput(RF, InData%InData_ExtLd) 
    call ExtLd_PackInitOutput(RF, InData%OutData_ExtLd) 
+   call ExtPtfmLd_PackInitInput(RF, InData%InData_ExtPtfmLd) 
+   call ExtPtfmLd_PackInitOutput(RF, InData%OutData_ExtPtfmLd) 
    call InflowWind_PackInitInput(RF, InData%InData_IfW) 
    call InflowWind_PackInitOutput(RF, InData%OutData_IfW) 
    call ExtInfw_PackInitInput(RF, InData%InData_ExtInfw) 
@@ -9251,6 +9603,8 @@ subroutine FAST_UnPackInitData(RF, OutData)
    call ADsk_UnpackInitOutput(RF, OutData%OutData_ADsk) ! OutData_ADsk 
    call ExtLd_UnpackInitInput(RF, OutData%InData_ExtLd) ! InData_ExtLd 
    call ExtLd_UnpackInitOutput(RF, OutData%OutData_ExtLd) ! OutData_ExtLd 
+   call ExtPtfmLd_UnpackInitInput(RF, OutData%InData_ExtPtfmLd) ! InData_ExtPtfmLd 
+   call ExtPtfmLd_UnpackInitOutput(RF, OutData%OutData_ExtPtfmLd) ! OutData_ExtPtfmLd 
    call InflowWind_UnpackInitInput(RF, OutData%InData_IfW) ! InData_IfW 
    call InflowWind_UnpackInitOutput(RF, OutData%OutData_IfW) ! OutData_IfW 
    call ExtInfw_UnpackInitInput(RF, OutData%InData_ExtInfw) ! InData_ExtInfw 
@@ -9425,6 +9779,9 @@ subroutine FAST_CopyTurbineType(SrcTurbineTypeData, DstTurbineTypeData, CtrlCode
    call FAST_CopyExtLoads_Data(SrcTurbineTypeData%ExtLd, DstTurbineTypeData%ExtLd, CtrlCode, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    if (ErrStat >= AbortErrLev) return
+   call FAST_CopyExtPtfmLd_Data(SrcTurbineTypeData%ExtPtfmLd, DstTurbineTypeData%ExtPtfmLd, CtrlCode, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   if (ErrStat >= AbortErrLev) return
    call FAST_CopyInflowWind_Data(SrcTurbineTypeData%IfW, DstTurbineTypeData%IfW, CtrlCode, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    if (ErrStat >= AbortErrLev) return
@@ -9501,6 +9858,8 @@ subroutine FAST_DestroyTurbineType(TurbineTypeData, ErrStat, ErrMsg)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    call FAST_DestroyExtLoads_Data(TurbineTypeData%ExtLd, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+   call FAST_DestroyExtPtfmLd_Data(TurbineTypeData%ExtPtfmLd, ErrStat2, ErrMsg2)
+   call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    call FAST_DestroyInflowWind_Data(TurbineTypeData%IfW, ErrStat2, ErrMsg2)
    call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
    call FAST_DestroyExternalInflow_Data(TurbineTypeData%ExtInfw, ErrStat2, ErrMsg2)
@@ -9548,6 +9907,7 @@ subroutine FAST_PackTurbineType(RF, Indata)
    call FAST_PackAeroDyn_Data(RF, InData%AD) 
    call FAST_PackAeroDisk_Data(RF, InData%ADsk) 
    call FAST_PackExtLoads_Data(RF, InData%ExtLd) 
+   call FAST_PackExtPtfmLd_Data(RF, InData%ExtPtfmLd) 
    call FAST_PackInflowWind_Data(RF, InData%IfW) 
    call FAST_PackExternalInflow_Data(RF, InData%ExtInfw) 
    call FAST_PackSeaState_Data(RF, InData%SeaSt) 
@@ -9583,6 +9943,7 @@ subroutine FAST_UnPackTurbineType(RF, OutData)
    call FAST_UnpackAeroDyn_Data(RF, OutData%AD) ! AD 
    call FAST_UnpackAeroDisk_Data(RF, OutData%ADsk) ! ADsk 
    call FAST_UnpackExtLoads_Data(RF, OutData%ExtLd) ! ExtLd 
+   call FAST_UnpackExtPtfmLd_Data(RF, OutData%ExtPtfmLd) ! ExtPtfmLd 
    call FAST_UnpackInflowWind_Data(RF, OutData%IfW) ! IfW 
    call FAST_UnpackExternalInflow_Data(RF, OutData%ExtInfw) ! ExtInfw 
    call FAST_UnpackSeaState_Data(RF, OutData%SeaSt) ! SeaSt 

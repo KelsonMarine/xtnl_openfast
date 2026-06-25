@@ -66,6 +66,7 @@ target_link_libraries(openfast_prelib
   servodynlib
   soildynlib
   subdynlib
+  extptfmloadslib
 )
 
 add_library(openfast_postlib STATIC

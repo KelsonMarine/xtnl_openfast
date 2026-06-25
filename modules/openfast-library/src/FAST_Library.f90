@@ -625,6 +625,93 @@ subroutine FAST_ExtLoads_Init(iTurb_c, TMax, InputFileName_c, TurbIDforName, Out
 
 end subroutine FAST_ExtLoads_Init
 !==================================================================================================================================
+subroutine FAST_ExtPtfmLoads_Init(iTurb_c, TMax, InputFileName_c, TurbIDforName, OutFileRoot_c, TurbPosn, AbortErrLev_c, dtDriver_c, dt_c, NumBl_c, &
+     az_blend_mean_c, az_blend_delta_c, &
+     ExtLd_Input_from_FAST, ExtLd_Parameter_from_FAST, ExtLd_Output_to_FAST, ErrStat_c, ErrMsg_c) BIND (C, NAME='FAST_ExtPtfmLoads_Init')
+   IMPLICIT NONE
+#ifndef IMPLICIT_DLLEXPORT
+!DEC$ ATTRIBUTES DLLEXPORT :: FAST_ExtPtfmLoads_Init
+!GCC$ ATTRIBUTES DLLEXPORT :: FAST_ExtPtfmLoads_Init
+#endif
+   INTEGER(C_INT),         INTENT(IN   ) :: iTurb_c      ! Turbine number, c indexing (starts at 0 for first turbine)
+   REAL(C_DOUBLE),         INTENT(IN   ) :: TMax
+   CHARACTER(KIND=C_CHAR), INTENT(IN   ) :: InputFileName_c(IntfStrLen)
+   INTEGER(C_INT),         INTENT(IN   ) :: TurbIDforName   ! Need not be same as iTurb
+   CHARACTER(KIND=C_CHAR), INTENT(  OUT) :: OutFileRoot_c(IntfStrLen)
+   REAL(C_FLOAT),          INTENT(IN   ) :: TurbPosn(3)
+   REAL(C_DOUBLE),         INTENT(IN   ) :: dtDriver_c
+   REAL(C_DOUBLE),         INTENT(IN   ) :: az_blend_mean_c
+   REAL(C_DOUBLE),         INTENT(IN   ) :: az_blend_delta_c
+   REAL(C_DOUBLE),         INTENT(  OUT) :: dt_c
+   INTEGER(C_INT),         INTENT(  OUT) :: AbortErrLev_c
+   INTEGER(C_INT),         INTENT(  OUT) :: NumBl_c
+   TYPE(ExtPtfmLdDX_InputType_C),     INTENT(  OUT) :: ExtLd_Input_from_FAST
+   TYPE(ExtPtfmLdDX_ParameterType_C), INTENT(  OUT) :: ExtLd_Parameter_from_FAST
+   TYPE(ExtPtfmLdDX_OutputType_C),    INTENT(  OUT) :: ExtLd_Output_to_FAST
+   INTEGER(C_INT),         INTENT(  OUT) :: ErrStat_c
+   CHARACTER(KIND=C_CHAR), INTENT(  OUT) :: ErrMsg_c(IntfStrLen)
+
+   ! local
+   CHARACTER(IntfStrLen)                 :: InputFileName
+   INTEGER(C_INT)                        :: i
+   TYPE(FAST_ExternInitType)             :: ExternInitData
+   INTEGER(IntKi)                        :: CompLoadsType
+   integer(IntKi)                        :: iTurb       ! turbine number: Fortran indexing (starts at 1 for first turbine)
+   CHARACTER(*),           PARAMETER     :: RoutineName = 'FAST_ExtLoads_Init'
+
+      ! transfer turbine index number from C to Fortran indexing (0 to 1 start)
+   iTurb = int(iTurb_c,IntKi) + 1
+
+      ! transfer the character array from C to a Fortran string:
+   InputFileName = TRANSFER( InputFileName_c, InputFileName )
+   I = INDEX(InputFileName,C_NULL_CHAR) - 1            ! if this has a c null character at the end...
+   IF ( I > 0 ) InputFileName = InputFileName(1:I)     ! remove it
+
+      ! initialize variables:
+   n_t_global = 0
+   ErrStat = ErrID_None
+   ErrMsg = ""
+
+   ExternInitData%TMax = TMax
+   ExternInitData%TurbIDforName = TurbIDforName
+   ExternInitData%TurbinePos = TurbPosn
+   ExternInitData%DTdriver = dtDriver_c
+   ! ExternInitData%az_blend_mean = az_blend_mean_c
+   ! ExternInitData%az_blend_delta = az_blend_delta_c
+
+   CALL FAST_InitializeAll_T( t_initial, 1_IntKi, Turbine(iTurb), ErrStat, ErrMsg, InputFileName, ExternInitData )
+
+   write(*,*) 'ErrMsg = ', ErrMsg
+      ! set values for return to ExternalInflow
+   if (ErrStat .ne. ErrID_None) then
+      AbortErrLev_c = AbortErrLev
+      ErrStat_c = ErrStat
+      ErrMsg_c  = TRANSFER( TRIM(ErrMsg)//C_NULL_CHAR, ErrMsg_c )
+      return
+   end if
+
+   dt_c = DBLE(Turbine(iTurb)%p_FAST%DT)
+
+   NumBl_c     = Turbine(iTurb)%ED%p(iED)%NumBl
+
+   CompLoadsType = Turbine(iTurb)%p_FAST%CompAero
+
+   ! if ( (CompLoadsType .ne. Module_ExtLd) ) then
+   !    CALL SetErrStat(ErrID_Fatal, "CompAero is not set to 3 for use of the External Loads module. Use a different C++ initialization call for this turbine.", ErrStat, ErrMsg, RoutineName )
+   !    ErrStat_c = ErrStat
+   !    ErrMsg_c  = TRANSFER( trim(ErrMsg)//C_NULL_CHAR, ErrMsg_c )
+   !    return
+   ! end if
+
+   call SetExtPtfmLoads_pointers(iTurb, ExtLd_Input_from_FAST, ExtLd_Parameter_from_FAST, ExtLd_Output_to_FAST)
+
+   OutFileRoot_c = TRANSFER( trim(Turbine(iTurb)%p_FAST%OutFileRoot)//C_NULL_CHAR, OutFileRoot_c )
+
+   ErrStat_c     = ErrStat
+   ErrMsg_c      = TRANSFER( trim(ErrMsg)//C_NULL_CHAR, ErrMsg_c )
+
+end subroutine FAST_ExtPtfmLoads_Init
+!==================================================================================================================================
 subroutine FAST_ExtInfw_Init(iTurb_c, TMax, InputFileName_c, TurbIDforName, OutFileRoot_c, &
                         NumActForcePtsBlade, NumActForcePtsTower, TurbPosn, AbortErrLev_c, &
                         dtDriver_c, dt_c, InflowType, NumBl_c, NumBlElem_c, NumTwrElem_c, NodeClusterType_c, &
@@ -1066,6 +1153,33 @@ subroutine SetExternalInflow_pointers(iTurb, ExtInfw_Input_from_FAST, ExtInfw_Ou
 
 
 end subroutine SetExternalInflow_pointers
+!==================================================================================================================================
+subroutine SetExtPtfmLoads_pointers(iTurb, ExtPtfmLd_iFromOF, ExtPtfmLd_pFromOF, ExtPtfmLd_oToOF)
+
+   IMPLICIT NONE
+   INTEGER(C_INT),                INTENT(IN   ) :: iTurb            ! Turbine number
+   TYPE(ExtPtfmLdDX_InputType_C),     INTENT(INOUT) :: ExtPtfmLd_iFromOF
+   TYPE(ExtPtfmLdDX_ParameterType_C), INTENT(INOUT) :: ExtPtfmLd_pFromOF
+   TYPE(ExtPtfmLdDX_OutputType_C),    INTENT(INOUT) :: ExtPtfmLd_oToOF
+
+   ! Inputs
+   ExtPtfmLd_iFromOF%ptfmDef_Len      = Turbine(iTurb)%ExtPtfmLd%Input(1)%DX_u%c_obj%ptfmDef_Len;      
+   ExtPtfmLd_iFromOF%ptfmDef          = Turbine(iTurb)%ExtPtfmLd%Input(1)%DX_u%c_obj%ptfmDef;      
+
+
+   ! Parameters
+   ExtPtfmLd_pFromOF%ptfmRefPos_Len       = Turbine(iTurb)%ExtPtfmLd%p%DX_p%c_obj%ptfmRefPos_Len;
+   ExtPtfmLd_pFromOF%ptfmRefPos       = Turbine(iTurb)%ExtPtfmLd%p%DX_p%c_obj%ptfmRefPos;
+
+
+   ! Outputs
+   ExtPtfmLd_oToOF%ptfmLd_Len         = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmLd_Len;
+   ExtPtfmLd_oToOF%ptfmLd             = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmLd;
+
+   ExtPtfmLd_oToOF%ptfmAddedMass_Len  = Turbine(iTurb)%ExtPtfmLd%y%DX_y%C_obj%ptfmAddedMass_Len;
+   ExtPtfmLd_oToOF%ptfmAddedMass      = Turbine(iTurb)%ExtPtfmLd%y%DX_y%c_obj%ptfmAddedMass;
+
+ end subroutine SetExtPtfmLoads_pointers
 !==================================================================================================================================
 subroutine FAST_CFD_Prework(iTurb_c, ErrStat_c, ErrMsg_c) BIND (C, NAME='FAST_CFD_Prework')
    IMPLICIT NONE

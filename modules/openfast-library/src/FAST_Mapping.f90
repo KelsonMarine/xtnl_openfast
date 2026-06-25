@@ -23,6 +23,7 @@ module FAST_Mapping
 use FAST_Types
 use FAST_ModTypes
 use ExtLoads
+use ExtPtfmLoads
 use ExternalInflow
 
 implicit none
@@ -42,6 +43,7 @@ integer(IntKi), parameter  :: Xfr_Invalid = 0, &
                               Xfr_Line2_to_Line2 = 4
 
 character(24), parameter   :: Custom_ED_to_ExtLd = 'ED -> ExtLd', &
+                              Custom_ED_to_ExtPtfmLd = 'ED -> ExtPtfmLd', &
                               Custom_SrvD_to_AD = 'SrvD -> AD', &
                               Custom_ED_to_ADsk = 'ED -> ADsk', &
                               Custom_SED_to_ADsk = 'SED -> ADsk', &
@@ -98,6 +100,8 @@ subroutine FAST_InputMeshPointer(ModData, Turbine, MeshLoc, Mesh, iInput, ErrSta
    case (Module_ExtLd)
       ! ExtLd doesn't have the typical input structure, using u
       Mesh => ExtLd_InputMeshPointer(Turbine%ExtLd%u, MeshLoc)
+   case (Module_ExtPtfmLd)
+      Mesh => ExtPtfmLd_InputMeshPointer(Turbine%ExtPtfmLd%Input(iInput), MeshLoc)
    case (Module_ExtPtfm)
       Mesh => ExtPtfm_InputMeshPointer(Turbine%ExtPtfm%Input(iInput), MeshLoc)
    case (Module_FEAM)
@@ -171,6 +175,8 @@ subroutine FAST_OutputMeshPointer(ModData, Turbine, MeshLoc, Mesh, ErrStat, ErrM
       Mesh => ExtLd_OutputMeshPointer(Turbine%ExtLd%y, MeshLoc)
    case (Module_ExtPtfm)
       Mesh => ExtPtfm_OutputMeshPointer(Turbine%ExtPtfm%y, MeshLoc)
+   case (Module_ExtPtfmLd)
+      Mesh => ExtPtfmLd_OutputMeshPointer(Turbine%ExtPtfmLd%y, MeshLoc)
    case (Module_FEAM)
       Mesh => FEAM_OutputMeshPointer(Turbine%FEAM%y, MeshLoc)
    case (Module_HD)
@@ -474,6 +480,8 @@ subroutine FAST_InitMappings(Mappings, Mods, Turbine, ErrStat, ErrMsg)
             call InitMappings_ExtLd(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
          case (Module_ExtPtfm)
             call InitMappings_ExtPtfm(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
+         case (Module_ExtPtfmLd)
+            call InitMappings_ExtPtfmLd(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
          case (Module_FEAM)
             call InitMappings_FEAM(MappingsTmp, Mods(iModSrc), Mods(iModDst), Turbine, ErrStat2, ErrMsg2)
          case (Module_HD)
@@ -1457,6 +1465,45 @@ subroutine InitMappings_ExtLd(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrMsg
                          DstDL=DatLoc(ExtLd_u_NacelleMotion), &          ! ExtLd%u%NacelleMotion
                          ErrStat=ErrStat2, ErrMsg=ErrMsg2)
       if(Failed()) return
+
+   end select
+
+contains
+   logical function Failed()
+      call SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      Failed = ErrStat >= AbortErrLev
+   end function
+end subroutine
+
+subroutine InitMappings_ExtPtfmLd(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrMsg)
+   type(MappingType), allocatable      :: Mappings(:)
+   type(ModDataType), intent(inout)       :: SrcMod, DstMod
+   type(FAST_TurbineType), intent(inout)  :: Turbine           !< Turbine type
+   integer(IntKi), intent(out)            :: ErrStat
+   character(*), intent(out)              :: ErrMsg
+
+   character(*), parameter    :: RoutineName = 'InitMappings_ExtPtfmLd'
+   integer(IntKi)             :: ErrStat2
+   character(ErrMsgLen)       :: ErrMsg2
+   integer(IntKi)             :: i, k, iBld
+   logical                    :: CompElastED
+
+   ErrStat = ErrID_None
+   ErrMsg = ''
+
+   ! Flag is true if CompElast == Module_ED
+   CompElastED = Turbine%p_FAST%CompElast == Module_ED
+
+   select case (SrcMod%ID)
+
+   case (Module_ED)
+
+      call MapCustom(Mappings, Custom_ED_to_ExtPtfmLd, SrcMod, DstMod)
+
+      call MapMotionMesh(Turbine, Mappings, SrcMod=SrcMod, DstMod=DstMod, &
+                         SrcDL=DatLoc(ED_y_PlatformPtMesh), &                    ! ED%y%PlatformPtMesh
+                         DstDL=DatLoc(ExtPtfmLd_u_PtfmMotion), &                     ! ExtPtfmLd%u%PtfmMotion
+                         ErrStat=ErrStat2, ErrMsg=ErrMsg2); if(Failed()) return
 
    end select
 
@@ -3460,6 +3507,21 @@ subroutine Custom_InputSolve(Mapping, ModSrc, ModDst, iInput, T, ErrStat, ErrMsg
 
       ! Note: this may be better inside CalcOutput
       call ExtLd_ConvertInpDataForExtProg(T%ExtLd%u, T%ExtLd%p, ErrStat2, ErrMsg2)
+      CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
+      if (ErrStat >= AbortErrLev) return
+
+!-------------------------------------------------------------------------------
+! ExtLoads Inputs
+!-------------------------------------------------------------------------------
+
+   case (Custom_ED_to_ExtPtfmLd)
+
+      ! T%ExtPtfmLd%u%az = T%ED%y(ModSrc%Ins)%LSSTipPxa
+      ! T%ExtPtfmLd%u%DX_u%bldPitch(:) = T%ED%y(ModSrc%Ins)%BlPitch
+      T%ED%Input(iInput, ModDst%Ins)%PtfmAddedMass(:, :) = reshape(T%ExtPtfmLd%y%DX_y%ptfmAddedMass, (/6, 6/))
+
+      ! Note: this may be better inside CalcOutput
+      call ExtPtfmLd_ConvertInpDataForExtProg(T%ExtPtfmLd%Input(iInput), T%ExtPtfmLd%p, ErrStat2, ErrMsg2)
       CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
       if (ErrStat >= AbortErrLev) return
 

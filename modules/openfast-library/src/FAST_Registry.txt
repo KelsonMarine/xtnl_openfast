@@ -32,6 +32,7 @@ usefrom	MAP_Registry.txt
 usefrom	MoorDyn_Registry.txt
 usefrom	OrcaFlexInterface.txt
 usefrom	ExtPtfm_MCKF_Registry.txt
+usefrom ExtPtfmLoads_Registry.txt
 
 # ...... Constants ............................................................................
 
@@ -65,7 +66,8 @@ param	^	-	INTEGER	Module_IceD	-	19	-	"IceDyn"	-
 param	^	-	INTEGER	Module_ADsk	-	20	-	"AeroDisk"	-
 param	^	-	INTEGER	Module_SED 	-	21	-	"Simplified-ElastoDyn" -
 param	^	-	INTEGER	Module_SlD	-	22	-	"SoilDyn"	-
-param	^	-	INTEGER	NumModules	-	22	-	"The number of modules available in FAST"	-
+param	^	-	INTEGER	Module_ExtPtfmLd -	23	-	"Simplified-ElastoDyn" -
+param	^	-	INTEGER	NumModules	-	23	-	"The number of modules available in FAST"	-
 # Other Constants
 param	^	-	INTEGER	MaxBladesBD	-	3	-	"Maximum number of blades allowed on a turbine"	-
 param	^	-	INTEGER	IceD_MaxLegs	-	4	-	"because I don't know how many legs there are before calling IceD_Init and I don't want to copy the data because of sibling mesh issues, I'm going to allocate IceD based on this number"	-
@@ -143,7 +145,7 @@ typedef	^	FAST_ParameterType	IntKi	CompInflow	-	-	-	"Compute inflow wind conditi
 typedef	^	FAST_ParameterType	IntKi	CompAero	-	-	-	"Compute aerodynamic loads (switch) {Module_None; Module_ADsk; Module_AD}"	-
 typedef	^	FAST_ParameterType	IntKi	CompServo	-	-	-	"Compute control and electrical-drive dynamics (switch) {Module_None; Module_SrvD}"	-
 typedef	^	FAST_ParameterType	IntKi	CompSeaSt   -	-	-	"Compute sea states; wave kinematics (switch) {Module_None; Module_SeaSt}"	-
-typedef	^	FAST_ParameterType	IntKi	CompHydro	-	-	-	"Compute hydrodynamic loads (switch) {Module_None; Module_HD}"	-
+typedef ^   FAST_ParameterType  IntKi   CompHydro   -   -   -   "Compute hydrodynamic loads (switch) {Module_None; Module_HD; Module_ExtPtfmLd}" -
 typedef	^	FAST_ParameterType	IntKi	CompSub	-	-	-	"Compute sub-structural dynamics (switch) {Module_None; Module_SD, Module_ExtPtfm, Module_SlD}"	-
 typedef	^	FAST_ParameterType	IntKi	CompMooring	-	-	-	"Compute mooring system (switch) {Module_None; Module_MAP; Module_FEAM; Module_MD; Module_Orca}"	-
 typedef	^	FAST_ParameterType	IntKi	CompIce	-	-	-	"Compute ice loading (switch) {Module_None; Module_IceF, Module_IceD}"	-
@@ -432,6 +434,17 @@ typedef	^	^	ExtPtfm_MiscVarType	m	-	-	-	"Misc/optimization variables"
 typedef	^	^	ExtPtfm_InputType	Input	{:}	-	-	"Array of inputs associated with InputTimes"
 typedef	^	^	DbKi	InputTimes	{:}	-	-	"Array of times associated with Input Array"
 
+# ..... ExtPtfmLd data .......................................................................................................
+typedef	FAST	ExtPtfmLd_Data	ExtPtfmLd_ContinuousStateType	x	{:}	-	-	"Continuous states"
+typedef	^	^	ExtPtfmLd_DiscreteStateType	xd	{:}	-	-	"Discrete states"
+typedef	^	^	ExtPtfmLd_ConstraintStateType	z	{:}	-	-	"Constraint states"
+typedef	^	^	ExtPtfmLd_OtherStateType	OtherSt	{:}	-	-	"Other states"
+typedef	^	^	ExtPtfmLd_ParameterType	p	-	-	-	"Parameters"
+typedef	^	^	ExtPtfmLd_OutputType	y	-	-	-	"System outputs"
+typedef	^	^	ExtPtfmLd_MiscVarType	m	-	-	-	"Misc/optimization variables"
+typedef	^	^	ExtPtfmLd_InputType	Input	{:}	-	-	"Array of inputs associated with InputTimes"
+typedef	^	^	DbKi	InputTimes	{:}	-	-	"Array of times associated with Input Array"
+
 # ..... SeaState data .......................................................................................................
 typedef	FAST	SeaState_Data	SeaSt_ContinuousStateType	x	{:}	-	-	"Continuous states"
 typedef	^	^	SeaSt_DiscreteStateType	xd	{:}	-	-	"Discrete states"
@@ -550,6 +563,8 @@ typedef   ^   FAST_InitData    ADsk_InitInputType           InData_ADsk     -  -
 typedef   ^   FAST_InitData    ADsk_InitOutputType         OutData_ADsk     -  -  -  "ADsk Initialization output data"
 typedef   ^   FAST_InitData    ExtLd_InitInputType          InData_ExtLd     -  -  - "ExtLd Initialization input data"
 typedef   ^   FAST_InitData    ExtLd_InitOutputType        OutData_ExtLd     -  -  - "ExtLd Initialization output data"
+typedef   ^   FAST_InitData    ExtPtfmLd_InitInputType      InData_ExtPtfmLd  -  -  -  "ExtPtfmLd Initialization input data"
+typedef   ^   FAST_InitData    ExtPtfmLd_InitOutputType    OutData_ExtPtfmLd  -  -  -  "ExtPtfmLd Initialization output data"
 typedef   ^   FAST_InitData    InflowWind_InitInputType     InData_IfW      -  -  -  "IfW Initialization input data"
 typedef   ^   FAST_InitData    InflowWind_InitOutputType   OutData_IfW      -  -  -  "IfW Initialization output data"
 typedef   ^   FAST_InitData    ExtInfw_InitInputType        InData_ExtInfw     -  -  -  "ExtInfw Initialization input data"
@@ -612,6 +627,7 @@ typedef	^	FAST_TurbineType	ServoDyn_Data	SrvD	-	-	-	"Data for the ServoDyn modul
 typedef	^	FAST_TurbineType	AeroDyn_Data	AD	-	-	-	"Data for the AeroDyn module"	-
 typedef	^	FAST_TurbineType	AeroDisk_Data	ADsk	-	-	-	"Data for the AeroDisk module"	-
 typedef	^	FAST_TurbineType	ExtLoads_Data	ExtLd	-	-	-	"Data for the External loads module"	-
+typedef	^	FAST_TurbineType	ExtPtfmLd_Data	ExtPtfmLd	-	-	-	"Data for the ExtPtfmLd (external platform loading) module"	-
 typedef	^	FAST_TurbineType	InflowWind_Data	IfW	-	-	-	"Data for InflowWind module"	-
 typedef	^	FAST_TurbineType	ExternalInflow_Data	ExtInfw	-	-	-	"Data for ExternalInflow integration module"	-
 typedef	^	FAST_TurbineType	SeaState_Data	SeaSt	-	-	-	"Data for the SeaState module"	-

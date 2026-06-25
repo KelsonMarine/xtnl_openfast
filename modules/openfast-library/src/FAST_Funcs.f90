@@ -58,6 +58,9 @@ use ElastoDyn, only: ED_JacobianPInput, &
 use ExtLoads, only:     ExtLd_CalcOutput, &
                         ExtLd_End
 
+use ExtPtfmLoads, only: ExtPtfmLd_CalcOutput, &
+                        ExtPtfmLd_End
+
 use ExtPtfm_MCKF, only: ExtPtfm_JacobianPInput, &
                         ExtPtfm_JacobianPContState, &
                         ExtPtfm_CalcContStateDeriv, &
@@ -221,6 +224,9 @@ subroutine FAST_ExtrapInterp(ModData, t_global_next, T, ErrStat, ErrMsg)
       ! Not used
 
    case (Module_ExtLd)
+      ! Not used
+
+   case (Module_ExtPtfmLd)
       ! Not used
 
    case (Module_ExtPtfm)
@@ -408,6 +414,8 @@ subroutine FAST_InitInputStateArrays(ModAry, ThisTime, DT, T, ErrStat, ErrMsg)
             ! T%ExtInfw%InputTimes = InputTimes
          case (Module_ExtLd)
             ! T%ExtLd%InputTimes = InputTimes
+         case (Module_ExtPtfmLd)
+            ! T%ExtPtfmLd%InputTimes = InputTimes
          case (Module_Orca)
             T%Orca%InputTimes = InputTimes
          case (Module_SD)
@@ -530,6 +538,9 @@ subroutine FAST_UpdateStates(ModData, t_initial, n_t_global, T, ErrStat, ErrMsg)
       end do
 
    case (Module_ExtLd)
+      ! Not used
+
+   case (Module_ExtPtfmLd)
       ! Not used
 
    case (Module_ExtInfw)
@@ -785,6 +796,11 @@ subroutine FAST_CalcOutput(ModData, Mappings, ThisTime, iInput, iState, T, ErrSt
       call ExtLd_CalcOutput(ThisTime, T%ExtLd%u, T%ExtLd%p, &
                             T%ExtLd%x(iState), T%ExtLd%xd(iState), T%ExtLd%z(iState), T%ExtLd%OtherSt(iState), &
                             T%ExtLd%y, T%ExtLd%m, ErrStat2, ErrMsg2)
+
+   case (Module_ExtPtfmLd)
+      call ExtPtfmLd_CalcOutput(ThisTime, T%ExtPtfmLd%Input(iInput), T%ExtPtfmLd%p, &
+                            T%ExtPtfmLd%x(iState), T%ExtPtfmLd%xd(iState), T%ExtPtfmLd%z(iState), T%ExtPtfmLd%OtherSt(iState), &
+                            T%ExtPtfmLd%y, T%ExtPtfmLd%m, ErrStat2, ErrMsg2)
 
    case (Module_ExtPtfm)
       call ExtPtfm_CalcOutput(ThisTime, T%ExtPtfm%Input(iInput), T%ExtPtfm%p, &
@@ -1659,6 +1675,14 @@ subroutine FAST_CopyStates(ModData, T, iSrc, iDst, CtrlCode, ErrStat, ErrMsg)
       call ExtLd_CopyConstrState(T%ExtLd%z(iSrc), T%ExtLd%z(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
       call ExtLd_CopyOtherState(T%ExtLd%OtherSt(iSrc), T%ExtLd%OtherSt(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
 
+   case (Module_ExtPtfmLd)
+
+      call ExtPtfmLd_CopyContState(T%ExtPtfmLd%x(iSrc), T%ExtPtfmLd%x(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
+      call ExtPtfmLd_CopyDiscState(T%ExtPtfmLd%xd(iSrc), T%ExtPtfmLd%xd(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
+      call ExtPtfmLd_CopyConstrState(T%ExtPtfmLd%z(iSrc), T%ExtPtfmLd%z(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
+      call ExtPtfmLd_CopyOtherState(T%ExtPtfmLd%OtherSt(iSrc), T%ExtPtfmLd%OtherSt(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
+
+
    case (Module_ExtPtfm)
 
       call ExtPtfm_CopyContState(T%ExtPtfm%x(iSrc), T%ExtPtfm%x(iDst), CtrlCode, ErrStat2, ErrMsg2); if (Failed()) return
@@ -1818,6 +1842,11 @@ subroutine FAST_CopyInput(ModData, T, iSrc, iDst, CtrlCode, ErrStat, ErrMsg)
       ErrStat2 = ErrID_None
       ErrMsg2 = ''
 
+   case (Module_ExtPtfmLd)
+      ! ExtPtfmLd only has u
+      ErrStat2 = ErrID_None
+      ErrMsg2 = ''
+
    case (Module_ExtPtfm)
       call ExtPtfm_CopyInput(T%ExtPtfm%Input(iSrc), T%ExtPtfm%Input(iDst), CtrlCode, ErrStat2, ErrMsg2)
 
@@ -1969,6 +1998,10 @@ subroutine FAST_ModEnd(Mods, T, ErrStat, ErrMsg)
             call ExtLd_End(T%ExtLd%u, T%ExtLd%p, T%ExtLd%x(STATE_CURR), T%ExtLd%xd(STATE_CURR), &
                            T%ExtLd%z(STATE_CURR), T%ExtLd%OtherSt(STATE_CURR), &
                            T%ExtLd%y, T%ExtLd%m, ErrStat2, ErrMsg2)
+
+         case (Module_ExtPtfmLd)
+            call ExtPtfmLd_End(T%ExtPtfmLd%Input(1), T%ExtPtfmLd%p, T%ExtPtfmLd%x(STATE_CURR), T%ExtPtfmLd%xd(STATE_CURR), &
+                             T%ExtPtfmLd%z(STATE_CURR), T%ExtPtfmLd%OtherSt(STATE_CURR), T%ExtPtfmLd%y, T%ExtPtfmLd%m, ErrStat2, ErrMsg2)
 
          case (Module_ExtPtfm)
             call ExtPtfm_End(T%ExtPtfm%Input(1), T%ExtPtfm%p, T%ExtPtfm%x(STATE_CURR), T%ExtPtfm%xd(STATE_CURR), &

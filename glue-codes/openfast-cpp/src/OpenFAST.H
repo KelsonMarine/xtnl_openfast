@@ -10,8 +10,9 @@
 #include <set>
 #include <map>
 #include <memory>
+#include <span>
 #include "netcdf.h"
-#include "dlfcn.h"
+// #include "dlfcn.h"
 //TODO: The skip MPICXX is put in place primarily to get around errors in ExternalInflow. This will cause problems if the driver program uses C++ API for MPI.
 #ifndef OMPI_SKIP_MPICXX
  #define OMPI_SKIP_MPICXX
@@ -28,6 +29,7 @@ namespace fast {
 enum simType {
     EXTINFLOW = 0,
     EXTLOADS  = 1,
+    EXTPTFMLOADS  = 2,
     simType_END
 };
 
@@ -330,6 +332,13 @@ class OpenFAST {
   //! Data structure to send force information to ExternalLoads module in OpenFAST
   std::vector<ExtLdDX_OutputType_t> extld_o_t_FAST; // Output to OpenFAST
 
+  //! Data structure to get deflections from ExternalLoads module in OpenFAST
+  std::vector<ExtPtfmLdDX_InputType_t> extptfmld_i_f_FAST; // Input from OpenFAST
+  //! Data structure to get deflections from ExternalLoads module in OpenFAST
+  std::vector<ExtPtfmLdDX_ParameterType_t> extptfmld_p_f_FAST; // Parameter from OpenFAST
+  //! Data structure to send force information to ExternalLoads module in OpenFAST
+  std::vector<ExtPtfmLdDX_OutputType_t> extptfmld_o_t_FAST; // Output to OpenFAST
+
   // Mapping of local turbine number to global turbine and processor number
   // Turbine Number is DIFFERENT from TurbID. Turbine Number simply runs from 0:n-1 locally and globally.
   //! Mapping global turbine number to processor number
@@ -389,6 +398,8 @@ class OpenFAST {
   void init_velForceNodeData();
   //! Set up before every OpenFAST time step. Safe to call on all MPI ranks.
   void prework();
+  ///! Calls FAST_CFD_Reset_SubStep on all the turbines
+  void reset_turbines();
   //! Update states to next time step by calling FAST_AdvanceStates_T and CalcOutputs_And_SolveForInputs. Safe to call on all MPI ranks.
   void update_states_driver_time_step(bool writeFiles=true);
   //! Copy the final predicted states from step t_global_next to actual states for that step. Safe to call on all MPI ranks.
@@ -666,6 +677,10 @@ class OpenFAST {
 
   //! An example function to set a uniform X force at all blade nodes. Safe to call from every MPI rank.
   void setUniformXBladeForces(double loadX);
+
+  std::span<const double> getPlatformPos();
+  std::span<double> getPlatformLoad();
+  std::span<double> getPlatformAddedMass();
 
 
 private:

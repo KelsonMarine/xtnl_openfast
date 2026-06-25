@@ -158,6 +158,7 @@ subroutine FAST_SolverInit(p_FAST, p, m, GlueModData, GlueModMaps, Turbine, ErrS
                  pack(modInds, ModIDs == Module_AD .and. p_FAST%MHK == MHK_None), &
                  pack(modInds, ModIDs == Module_ADsk), &
                  pack(modInds, ModIDs == Module_ExtLd), &
+                 pack(modInds, ModIDs == Module_ExtPtfmLd), &
                  pack(modInds, ModIDs == Module_FEAM), &
                  pack(modInds, ModIDs == Module_IceD), &
                  pack(modInds, ModIDs == Module_IceF), &

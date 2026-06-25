@@ -34,6 +34,7 @@ MODULE FAST_Subs
    use ElastoDyn, only: ED_Init
    use ExtLoads, only: ExtLd_Init
    use ExtPtfm_MCKF, only: ExtPtfm_Init
+   use ExtPtfmLoads, only: ExtPtfmLd_Init
    use ExternalInflow, only: Init_ExtInfw
    use HydroDyn, only: HydroDyn_Init
    use InflowWind, only: InflowWind_Init
@@ -76,7 +77,7 @@ SUBROUTINE FAST_InitializeAll_T( t_initial, TurbID, Turbine, ErrStat, ErrMsg, In
 
    CALL FAST_InitializeAll( t_initial, Turbine%m_Glue, Turbine%p_FAST, Turbine%y_FAST, Turbine%m_FAST, &
                Turbine%ED, Turbine%SED, Turbine%BD, Turbine%SrvD, Turbine%AD, Turbine%ADsk, Turbine%ExtLd, Turbine%IfW, Turbine%ExtInfw, &
-               Turbine%SeaSt, Turbine%HD, Turbine%SD, Turbine%ExtPtfm, Turbine%MAP, Turbine%FEAM, Turbine%MD, Turbine%Orca, &
+               Turbine%SeaSt, Turbine%HD, Turbine%SD, Turbine%ExtPtfm, Turbine%ExtPtfmLd, Turbine%MAP, Turbine%FEAM, Turbine%MD, Turbine%Orca, &
                Turbine%IceF, Turbine%IceD, Turbine%SlD, CompAeroMaps, ErrStat, ErrMsg, InFile, ExternInitData )
    if(ErrStat >= AbortErrLev) return
 
@@ -105,7 +106,7 @@ END SUBROUTINE FAST_InitializeAll_T
 !----------------------------------------------------------------------------------------------------------------------------------
 !> Routine to call Init routine for each module. This routine sets all of the init input data for each module.
 SUBROUTINE FAST_InitializeAll( t_initial, m_Glue, p_FAST, y_FAST, m_FAST, ED, SED, BD, SrvD, AD, ADsk, ExtLd, IfW, ExtInfw, SeaSt, HD, SD, ExtPtfm, &
-                               MAPp, FEAM, MD, Orca, IceF, IceD, SlD, CompAeroMaps, ErrStat, ErrMsg, InFile, ExternInitData )
+                               ExtPtfmLd, MAPp, FEAM, MD, Orca, IceF, IceD, SlD, CompAeroMaps, ErrStat, ErrMsg, InFile, ExternInitData )
 
    use ElastoDyn_Parameters, only: Method_RK4
 
@@ -129,6 +130,7 @@ SUBROUTINE FAST_InitializeAll( t_initial, m_Glue, p_FAST, y_FAST, m_FAST, ED, SE
    TYPE(SubDyn_Data),        INTENT(INOUT) :: SD                  !< SubDyn data
    TYPE(SoilDyn_Data),       INTENT(INOUT) :: SlD                 !< SoilDyn data
    TYPE(ExtPtfm_Data),       INTENT(INOUT) :: ExtPtfm             !< ExtPtfm_MCKF data
+   TYPE(ExtPtfmLd_Data),     INTENT(INOUT) :: ExtPtfmLd           !< ExtPtfmLd data
    TYPE(MAP_Data),           INTENT(INOUT) :: MAPp                !< MAP data
    TYPE(FEAMooring_Data),    INTENT(INOUT) :: FEAM                !< FEAMooring data
    TYPE(MoorDyn_Data),       INTENT(INOUT) :: MD                  !< Data for the MoorDyn module
@@ -1081,6 +1083,59 @@ SUBROUTINE FAST_InitializeAll( t_initial, m_Glue, p_FAST, y_FAST, m_FAST, ED, SE
       ! Add module
       CALL MV_AddModule(m_Glue%ModData, Module_HD, 'HD', 1, dt_module, p_FAST%DT, &
                         Init%OutData_HD%Vars, p_FAST%Linearize, ErrStat2, ErrMsg2)
+      if (Failed()) return
+
+   END IF   ! CompHydro
+
+   allocate(ExtPtfmLd%Input             (InputAryLB:InputAryUB), stat=ErrStat2); if (FailedAlloc("ExtPtfmLd%Input")) return
+   allocate(ExtPtfmLd%InputTimes        (InputAryUB           ), stat=ErrStat2); if (FailedAlloc("ExtPtfmLd%InputTimes")) return
+   allocate(ExtPtfmLd%x                 (StateAryUB           ), stat=ErrStat2); if (FailedAlloc("ExtPtfmLd%x")) return
+   allocate(ExtPtfmLd%xd                (StateAryUB           ), stat=ErrStat2); if (FailedAlloc("ExtPtfmLd%xd")) return
+   allocate(ExtPtfmLd%z                 (StateAryUB           ), stat=ErrStat2); if (FailedAlloc("ExtPtfmLd%z")) return
+   allocate(ExtPtfmLd%OtherSt           (StateAryUB           ), stat=ErrStat2); if (FailedAlloc("ExtPtfmLd%OtherSt")) return
+
+   IF (p_FAST%CompHydro == Module_ExtPtfmLd) THEN
+
+
+      Init%InData_ExtPtfmLd%PtfmRefzt = ED%p(1)%PtfmRefzt ! Required
+      ! Init%InData_HD%Gravity       = p_FAST%Gravity
+      ! Init%InData_HD%UseInputFile  = .TRUE.
+      ! Init%InData_HD%InputFile     = p_FAST%HydroFile
+      ! Init%InData_HD%OutRootName   = TRIM(p_FAST%OutFileRoot)//'.'//TRIM(y_FAST%Module_Abrev(Module_HD))
+      ! Init%InData_HD%TMax          = p_FAST%TMax
+      ! Init%InData_HD%Linearize     = p_FAST%Linearize
+
+      ! Initial platform position; PlatformPos(1:3) is effectively the initial position of the HD origin
+      ! if ( p_FAST%CompSub == Module_SD ) then
+      !    if ( Init%OutData_SD%IsFloating ) then
+      !       if ( Init%OutData_SD%SDHasRBDoF ) then
+      !          Init%InData_ExtPtfmLd%PtfmPos = Init%OutData_SD%PlatformPos
+      !       else
+      !          Init%InData_ExtPtfmLd%PtfmPos = Init%OutData_ED(1)%PlatformPos
+      !       end if
+      !    else
+      !       Init%InData_ExtPtfmLd%PtfmPos = 0.0
+      !    endif
+      ! else
+      !    Init%InData_ExtPtfmLd%PtfmPos = Init%OutData_ED(1)%PlatformPos
+      ! end if
+
+      ! If VTK output requested, set VisMeshes to true
+      ! if (p_FAST%WrVTK /= VTK_None) Init%InData_HD%VisMeshes = .true.
+      
+      ! Set information from SeaState
+      ! Init%InData_HD%InvalidWithSSExctn = Init%OutData_SeaSt%InvalidWithSSExctn
+      ! Init%InData_HD%WaveField => Init%OutData_SeaSt%WaveField
+            
+      ! Call module initialization routine
+      dt_module = p_FAST%DT
+      CALL ExtptfmLd_Init( Init%InData_ExtPtfmLd, ExtPtfmLd%Input(1), ExtPtfmLd%p,  ExtPtfmLd%x(STATE_CURR), ExtPtfmLd%xd(STATE_CURR), ExtPtfmLd%z(STATE_CURR), &
+                          ExtPtfmLd%OtherSt(STATE_CURR), ExtPtfmLd%y, ExtPtfmLd%m, dt_module, Init%OutData_ExtPtfmLd, ErrStat2, ErrMsg2 )
+      if (Failed()) return
+
+      ! Add module
+      CALL MV_AddModule(m_Glue%ModData, Module_ExtPtfmLd, 'ExtPtfmLd', 1, dt_module, p_FAST%DT, &
+                        Init%OutData_ExtPtfmLd%Vars, p_FAST%Linearize, ErrStat2, ErrMsg2)
       if (Failed()) return
 
    END IF   ! CompHydro
@@ -2969,7 +3024,7 @@ SUBROUTINE FAST_ReadPrimaryFile( InputFile, p, m_FAST, OverrideAbortErrLev, ErrS
    end select
 
       ! CompHydro - Compute hydrodynamic loads (switch) {0=None; 1=HydroDyn}:
-   CALL ReadVar( UnIn, InputFile, p%CompHydro, "CompHydro", "Compute hydrodynamic loads (switch) {0=None; 1=HydroDyn}", ErrStat2, ErrMsg2, UnEc)
+   CALL ReadVar( UnIn, InputFile, p%CompHydro, "CompHydro", "Compute hydrodynamic loads (switch) {0=None; 1=HydroDyn; 2=ExtPtfmLoad}", ErrStat2, ErrMsg2, UnEc)
    if (Failed()) return
 
    ! immediately convert to values used inside the code:
@@ -2978,6 +3033,8 @@ SUBROUTINE FAST_ReadPrimaryFile( InputFile, p, m_FAST, OverrideAbortErrLev, ErrS
       p%CompHydro = Module_NONE
    case (1)
       p%CompHydro = Module_HD
+   case (2)
+      p%CompHydro = Module_ExtPtfmLd
    case default
       p%CompHydro = Module_Unknown
    end select
