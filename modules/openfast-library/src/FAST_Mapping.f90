@@ -55,6 +55,7 @@ character(24), parameter   :: Custom_ED_to_ExtLd = 'ED -> ExtLd', &
                               Custom_SED_to_SrvD = 'SED -> SrvD', &
                               Custom_ExtInfw_to_AD = 'ExtInfw -> AD', &
                               Custom_ExtInfw_to_SrvD = 'ExtInfw -> SrvD', &
+                              Custom_ExtPtfmLd_to_ED = 'ExtPtfmLd -> ED', &
                               Custom_IfW_to_SrvD = 'IfW -> SrvD', &
                               Custom_SrvD_to_ED = 'SrvD -> ED', &
                               Custom_SrvD_to_SED = 'SrvD -> SED', &
@@ -1090,6 +1091,10 @@ subroutine InitMappings_ED(Mappings, SrcMod, DstMod, Turbine, ErrStat, ErrMsg)
                        Active=Turbine%p_FAST%CompSub == Module_ExtPtfm, &
                        ErrStat=ErrStat2, ErrMsg=ErrMsg2)
       if (Failed()) return
+
+   case (Module_ExtPtfmLd)
+
+      call MapCustom(Mappings, Custom_ExtPtfmLd_to_ED, SrcMod, DstMod)
 
    case (Module_FEAM)
 
@@ -3311,6 +3316,8 @@ subroutine FAST_ResetMappingReady(MapAry)
       select case (MapAry(i)%SrcModID)
       case (Module_ExtInfw)   ! Modules always ready to transfer
          MapAry(i)%Ready = .true.
+      case (Module_ExtPtfmLd)
+         MapAry(i)%Ready = .true.
       case default            ! Default to transfer is not ready
          MapAry(i)%Ready = .false.
       end select
@@ -3474,6 +3481,10 @@ subroutine Custom_InputSolve(Mapping, ModSrc, ModDst, iInput, T, ErrStat, ErrMsg
       T%ED%Input(iInput, Mapping%DstIns)%PlatformPtMesh%Force  = T%ED%Input(iInput, Mapping%DstIns)%PlatformPtMesh%Force  + T%m_Glue%Ext%SubstructureLoadsFF%Force
       T%ED%Input(iInput, Mapping%DstIns)%PlatformPtMesh%Moment = T%ED%Input(iInput, Mapping%DstIns)%PlatformPtMesh%Moment + T%m_Glue%Ext%SubstructureLoadsFF%Moment
 
+   case (Custom_ExtPtfmLd_to_ED)
+
+      T%ED%Input(iInput, ModDst%Ins)%PtfmAddedMass(:, :) = reshape(T%ExtPtfmLd%y%DX_y%ptfmAddedMass, (/6, 6/))
+
 !-------------------------------------------------------------------------------
 ! SED Inputs
 !-------------------------------------------------------------------------------
@@ -3515,12 +3526,6 @@ subroutine Custom_InputSolve(Mapping, ModSrc, ModDst, iInput, T, ErrStat, ErrMsg
 !-------------------------------------------------------------------------------
 
    case (Custom_ED_to_ExtPtfmLd)
-
-      ! T%ExtPtfmLd%u%az = T%ED%y(ModSrc%Ins)%LSSTipPxa
-      ! T%ExtPtfmLd%u%DX_u%bldPitch(:) = T%ED%y(ModSrc%Ins)%BlPitch
-      T%ED%Input(iInput, ModDst%Ins)%PtfmAddedMass(:, :) = reshape(T%ExtPtfmLd%y%DX_y%ptfmAddedMass, (/6, 6/))
-
-      ! Note: this may be better inside CalcOutput
       call ExtPtfmLd_ConvertInpDataForExtProg(T%ExtPtfmLd%Input(iInput), T%ExtPtfmLd%p, ErrStat2, ErrMsg2)
       CALL SetErrStat(ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName)
       if (ErrStat >= AbortErrLev) return

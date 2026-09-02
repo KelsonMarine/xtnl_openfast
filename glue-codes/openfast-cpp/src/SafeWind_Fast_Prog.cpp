@@ -363,15 +363,6 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (FAST.isTimeZero()) {
-    if (setExpLawWind)
-      FAST.setExpLawWindSpeed(0.0);
-
-    FAST.solution0();
-  }
-
-  ntStart = tStart / fi.dtDriver; // Calculate the first time step
-  ntEnd = tEnd / fi.dtDriver;     // Calculate the last time step
   int iTurbLoc = FAST.get_localTurbNo(0);
   fast::turbineDataType turbineData{};
   FAST.get_turbineParams(iTurbLoc, turbineData);
@@ -382,7 +373,57 @@ int main(int argc, char **argv) {
   std::vector<double> towerPos(numForcePts * 6, 0.0);
 
   FAST.getTowerRefPositions(towerPos, iTurbLoc);
+
   PipeChannel ch(PIPE_OFA_TO_OFO, PIPE_OFO_TO_OFA);
+
+  if (FAST.isTimeZero()) {
+    if (setExpLawWind) {
+      FAST.setExpLawWindSpeed(0.0);
+    }
+
+    auto platformPos = FAST.getPlatformPos();
+    assert(platformPos.size() == 24);
+    const auto *pos =
+        reinterpret_cast<const PlatformPos *>(platformPos.data());
+    std::cout << "Starting pos:\n";
+    pos->debug_print();
+
+    auto platformLoad = FAST.getPlatformLoad();
+    auto ptfmAddedMass = FAST.getPlatformAddedMass();
+
+    SimMessage in = ch.recv(); // <-- blocks until A sends
+    std::cout << "[OpenFAST] Received from OpenFOAM: step=" << in.step
+              << " tag=" << in.tag << " v0=" << in.values[0] << "\n";
+    std::fill(platformLoad.begin(), platformLoad.end(), 0.0);
+
+    std::span<double> recv_vals{in.values,
+                                static_cast<size_t>(in.n_values)};
+    std::copy(recv_vals.begin(), recv_vals.begin() + 6, platformLoad.begin());
+
+    std::cout << "platform added mass ptr = " << ptfmAddedMass.data() << std::endl;
+    std::copy(recv_vals.begin() + 6, recv_vals.begin() + (6 + 36), ptfmAddedMass.begin());
+
+    std::cout << "platformLoad = [" << platformLoad[0] << ", "
+              << platformLoad[1] << ", " << platformLoad[2] << "]\n";
+
+
+    FAST.solution0();
+
+    platformPos = FAST.getPlatformPos();
+    assert(platformPos.size() == 24);
+    pos = reinterpret_cast<const PlatformPos *>(platformPos.data());
+    pos->debug_print();
+
+    SimMessage out{};
+    out.step = 0;
+    pos->fill_message(out);
+    // std::snprintf(out.tag, sizeof(out.tag), "B_step_%d", step);
+    ch.send(out);
+
+  }
+
+  ntStart = tStart / fi.dtDriver; // Calculate the first time step
+  ntEnd = tEnd / fi.dtDriver;     // Calculate the last time step
 
   for (int nt = ntStart; nt < ntEnd; nt++) {
     if (couplingMode == 0) {
@@ -427,33 +468,19 @@ int main(int argc, char **argv) {
         FAST.get_data_from_openfast(fast::timeStep::STATE_NP1);
 
         auto platformLoad = FAST.getPlatformLoad();
+        auto ptfmAddedMass = FAST.getPlatformAddedMass();
+
         SimMessage in = ch.recv(); // <-- blocks until A sends
         std::cout << "[OpenFAST] Received from OpenFOAM: step=" << in.step
                   << " tag=" << in.tag << " v0=" << in.values[0] << "\n";
         std::fill(platformLoad.begin(), platformLoad.end(), 0.0);
-        platformLoad[2] = pos->pos.z * -10000000;
+
         std::span<double> recv_vals{in.values,
                                     static_cast<size_t>(in.n_values)};
         std::copy(recv_vals.begin(), recv_vals.begin() + 6, platformLoad.begin());
-        // const double scale_factor = 343630;
-        const double scale_factor = 1;
-        platformLoad[0] *= scale_factor;
-        platformLoad[1] *= scale_factor;
-        platformLoad[2] *= scale_factor;
-        platformLoad[3] *= scale_factor;
-        platformLoad[4] *= scale_factor;
-        platformLoad[5] *= scale_factor;
-        auto ptfmAddedMass = FAST.getPlatformAddedMass();
+
         std::cout << "platform added mass ptr = " << ptfmAddedMass.data() << std::endl;
         std::copy(recv_vals.begin() + 6, recv_vals.begin() + (6 + 36), ptfmAddedMass.begin());
-        // Vec3 platForce{platformLoad[0], platformLoad[1],platformLoad[2]};
-        // if (iter > 0 && (iter + 1) < num_outer_iters) {
-        //   platformLoad[0] = 0.5 * lastForce.x + 0.5 * platForce.x;
-        //   platformLoad[1] = 0.5 * lastForce.y + 0.5 * platForce.y;
-        //   platformLoad[2] = 0.5 * lastForce.z + 0.5 * platForce.z;
-        // }
-
-        // lastForce = Vec3{platformLoad[0], platformLoad[1],platformLoad[2]};
 
         std::cout << "platformLoad = [" << platformLoad[0] << ", "
                   << platformLoad[1] << ", " << platformLoad[2] << "]\n";

@@ -22,7 +22,7 @@ public :: FAST_SolverInit, &
           FAST_CalcOutputsAndSolveForInputs
 
 ! Debugging
-logical, parameter         :: DebugSolver = .false.
+logical, parameter         :: DebugSolver = .true.
 integer(IntKi)             :: DebugUn = -1
 character(*), parameter    :: DebugFile = 'solver.dbg'
 logical, parameter         :: DebugJacobian = .false.
