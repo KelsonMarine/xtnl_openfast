@@ -23,7 +23,16 @@ enable_language(CXX Fortran)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(MPI REQUIRED)
+option(USE_MPI "Compile cpp glue codes with mpi" ON)
+
+if (USE_MPI)
+  find_package(MPI REQUIRED)
+else()
+  set(MPI_LIBRARIES "")
+  set(MPI_INCLUDE_PATH "")
+  set(MPI_INCLUDE_PATH "")
+endif()
+
 find_package(LibXml2 REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(HDF5 REQUIRED)
@@ -31,6 +40,11 @@ find_package(NetCDF REQUIRED COMPONENTS C)
 
 add_library(openfastcpplib SHARED src/OpenFAST.cpp)
 set_property(TARGET openfastcpplib PROPERTY POSITION_INDEPENDENT_CODE ON)
+
+if (MPI_FOUND)
+  target_compile_definitions(openfastcpplib PUBLIC -DUSE_MPI)
+endif()
+
 target_link_libraries(openfastcpplib
   openfastlib
   ${HDF5_LIBRARIES}
@@ -68,6 +82,10 @@ if (BUILD_OPENFAST_CPP_DRIVER)
   target_include_directories(openfastcpp PRIVATE ${YAML_CPP_INCLUDE_DIR})
   set_target_properties(openfastcpp PROPERTIES LINKER_LANGUAGE CXX)
 
+  if (MPI_FOUND)
+    target_compile_definitions(openfastcpp PUBLIC -DUSE_MPI)
+  endif()
+
   if(MPI_COMPILE_FLAGS)
     set_target_properties(openfastcpp PROPERTIES
       COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
@@ -86,13 +104,17 @@ if (BUILD_OPENFAST_CPP_DRIVER)
     PUBLIC_HEADER DESTINATION include
   )
 
-  add_executable(safewindopenfastcpp src/SafeWind_FAST_Prog.cpp)
+  add_executable(safewindopenfastcpp src/SafeWind_Fast_Prog.cpp)
   target_link_libraries(safewindopenfastcpp 
     ${YAML_CPP_LIBRARIES}
     openfastcpplib 
   )
   target_include_directories(safewindopenfastcpp PRIVATE ${YAML_CPP_INCLUDE_DIR})
   set_target_properties(safewindopenfastcpp PROPERTIES LINKER_LANGUAGE CXX)
+
+  if (MPI_FOUND)
+    target_compile_definitions(safewindopenfastcpp PUBLIC -DUSE_MPI)
+  endif()
 
   if(MPI_COMPILE_FLAGS)
     set_target_properties(safewindopenfastcpp PROPERTIES

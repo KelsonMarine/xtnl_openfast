@@ -1,5 +1,4 @@
 #include "OpenFAST.H"
-#include "ipc_pipes.h"
 #include "yaml-cpp/yaml.h"
 #include <cassert>
 #include <iomanip>
@@ -9,9 +8,14 @@
 #include "ipc_pipes.H"
 #include <array>
 #include <cmath>
-#include <mpi.h>
 #include <vector>
 #include <sstream>
+
+#ifdef USE_MPI
+
+#include <mpi.h>
+
+#endif /* USE_MPI*/
 
 inline bool checkFileExists(const std::string &name) {
   struct stat buffer;
@@ -28,8 +32,10 @@ void get_if_present(const YAML::Node &node, const std::string &key, T &result,
     const YAML::Node value = node[key];
     result = value.as<T>();
   } else {
-    int rank;
+    int rank = 0;
+#ifdef USE_MPI
     int iErr = MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#endif
     if (!rank)
       std::cout << key
                 << " is missing in the input file. Proceeding with assumption "
@@ -120,8 +126,9 @@ void readInputFile(fast::fastInputs &fi, std::string cInterfaceInputFile,
                    double *tStart, double *tEnd, int *couplingMode,
                    bool *setExpLawWind, bool *setUniformXBladeForces,
                    int *nIter, double *xBladeForce, int *numOuterIters) {
-
+#ifdef USE_MPI
   fi.comm = MPI_COMM_WORLD;
+#endif
 
   // Check if the input file exists and read it
   if (checkFileExists(cInterfaceInputFile)) {
@@ -311,15 +318,19 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  std::vector<double> torque(3, 0.0);
+  std::vector<double> thrust(3, 0.0);
+
+#ifdef USE_MPI
   int iErr;
   int nProcs;
   int rank;
-  std::vector<double> torque(3, 0.0);
-  std::vector<double> thrust(3, 0.0);
 
   iErr = MPI_Init(NULL, NULL);
   iErr = MPI_Comm_size(MPI_COMM_WORLD, &nProcs);
   iErr = MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+#endif /* USE_MPI */
+
 
   int couplingMode; // CLASSIC (SOWFA style = 0) or STRONG (Conventional Serial
                     // Staggered - allow for outer iterations = 1)
@@ -359,7 +370,11 @@ int main(int argc, char **argv) {
 
   if (FAST.isDryRun()) {
     FAST.end();
+
+#ifdef USE_MPI
     MPI_Finalize();
+#endif
+
     return 0;
   }
 
@@ -516,7 +531,10 @@ int main(int argc, char **argv) {
   }
 
   FAST.end();
+
+#ifdef USE_MPI
   MPI_Finalize();
+#endif /* USE_MPI */
 
   return 0;
 }

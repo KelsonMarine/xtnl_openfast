@@ -1483,10 +1483,14 @@ void fast::OpenFAST::step(bool writeFiles) {
 
 void fast::OpenFAST::setInputs(const fast::fastInputs & fi ) {
 
+#ifdef USE_MPI
     mpiComm = fi.comm;
 
     MPI_Comm_rank(mpiComm, &worldMPIRank);
     MPI_Comm_group(mpiComm, &worldMPIGroup);
+#else
+    worldMPIRank = 0;
+#endif /* USE_MPI */
 
     nTurbinesGlob = fi.nTurbinesGlob;
 
@@ -2113,8 +2117,11 @@ void fast::OpenFAST::allocateMemory_postInit(int iTurbLoc) {
 
 void fast::OpenFAST::allocateTurbinesToProcsSimple() {
     // Allocate turbines to each processor - round robin fashion
-    int nProcs ;
+    int nProcs = 1;
+#ifdef USE_MPI
     MPI_Comm_size(mpiComm, &nProcs);
+#endif /* USE_MPI */
+
     for(int j = 0; j < nTurbinesGlob; j++)  turbineMapGlobToProc[j] = j % nProcs ;
 }
 

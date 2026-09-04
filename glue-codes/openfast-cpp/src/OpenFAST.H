@@ -13,6 +13,7 @@
 #include <span>
 #include "netcdf.h"
 // #include "dlfcn.h"
+#ifdef USE_MPI
 //TODO: The skip MPICXX is put in place primarily to get around errors in ExternalInflow. This will cause problems if the driver program uses C++ API for MPI.
 #ifndef OMPI_SKIP_MPICXX
  #define OMPI_SKIP_MPICXX
@@ -21,6 +22,8 @@
  #define MPICH_SKIP_MPICXX
 #endif
 #include "mpi.h"
+
+#endif /* USE_MPI */
 
 
 namespace fast {
@@ -210,8 +213,10 @@ class fastInputs {
 
  public:
 
+#ifdef USE_MPI
   //! MPI Communicator
   MPI_Comm comm;
+#endif
   //! Total number of turbines in the simulation
   int nTurbinesGlob{0};
   //! The simulation will not run if dryRun is set to true. However, the simulation will read the input files, allocate turbines to processors and prepare to run the individual turbine instances. This flag is useful to test the setup of the simulation before running it.
@@ -252,8 +257,10 @@ class OpenFAST {
 
  private:
 
+#ifdef USE_MPI
   //! MPI Communicator
   MPI_Comm mpiComm;
+#endif
   //! The simulation will not run if dryRun is set to true. However, the simulation will read the input files, allocate turbines to processors and prepare to run the individual turbine instances. This flag is useful to test the setup of the simulation before running it.
   bool dryRun{false};        // If this is true, class will simply go through allocation and deallocation of turbine data
   //! Enable debug outputs if set to true
@@ -352,6 +359,7 @@ class OpenFAST {
   //! Same as the turbineSetProcs, but as an integer array
   std::vector<int> turbineProcs;
 
+#ifdef USE_MPI
   // MPI related book keeping for all processors containing turbines
   //! Number of processors in a fastMPIGroup
   int fastMPIGroupSize{-1};
@@ -364,6 +372,9 @@ class OpenFAST {
 
   //! Global MPI group
   MPI_Group worldMPIGroup;
+
+#endif /* USE_MPI */
+
   //! MPI rank of processor on global MPI Comm
   int worldMPIRank{-1};
 
